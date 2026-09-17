@@ -1,0 +1,9 @@
+supabase
+python-dotenv
+pypdf
+tiktoken
+numpy
+fastapi
+uvicorn
+streamlit
+pytest
