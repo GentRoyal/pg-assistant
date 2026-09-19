@@ -1,117 +1,505 @@
+import argparse
+import json
 import re
+import unicodedata
+from collections import Counter
 from pathlib import Path
+
 import fitz
 
-# Dynamic path for macOS
-pdf_path = Path.home() / "Downloads" / "MANUAL_OF_STYLE.pdf"
+LIGATURES = {
+    "ﬀ": "ff",
+    "ﬁ": "fi",
+    "ﬂ": "fl",
+    "ﬃ": "ffi",
+    "ﬄ": "ffl",
+    "ﬅ": "st",
+    "ﬆ": "st",
+}
 
-if not pdf_path.exists():
-    print(f"Error: File not found at {pdf_path}")
-    exit()
+PUNCTUATION_MAP = {
+    "‘": "'",
+    "’": "'",
+    "‚": "'",
+    "“": '"',
+    "”": '"',
+    "„": '"',
+    "–": "-",
+    "—": "-",
+    "―": "-",
+    "−": "-",
+    " ": " ",
+    " ": " ",
+    " ": " ",
+    "​": "",
+    "‌": "",
+    "‍": "",
+    "﻿": "",
+    "­": "",
+}
 
-pdf = fitz.open(pdf_path)
+CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+DOT_LEADER = re.compile(r"[.·…_\-]{4,}\s*\d{0,4}\s*$")
+DOT_LEADER_LINE = re.compile(r"^.{2,}?[.·…]{4,}\s*\d{0,4}$")
+LEADER_RUN = re.compile(r"�{2,}")
+LEADING_GLYPH = re.compile(r"^\s*�\s+")
+MULTI_SPACE = re.compile(r"[ \t]+")
+HYPHEN_BREAK = re.compile(r"(\w)-$")
+
+PAGE_NUMBER_PATTERNS = [
+    re.compile(r"^\(?\s*(?:page|pg\.?|p\.)?\s*(\d{1,4})\s*(?:of\s*\d{1,4})?\s*\)?$", re.IGNORECASE),
+    re.compile(r"^[-–—|\[\(]\s*(\d{1,4})\s*[-–—|\]\)]$"),
+    re.compile(r"^(?:[ivxlcdm]{1,7})$", re.IGNORECASE),
+]
+
+BULLET_PREFIX = re.compile(
+    r"^\s*(?:"
+    r"[•●○▪■◦‣⁃∙·−–—\-\*o]\s+"
+    r"|\(?\d{1,2}[.)]\s+"
+    r"|\(\s*[a-zA-Z]\s*\)\s*"
+    r"|[a-z][.)]\s+"
+    r"|\(\s*[ivxIVX]{1,4}\s*\)\s*"
+    r"|[ivx]{1,4}[.)]\s+"
+    r")"
+)
+
+NUMBERED_HEADING = re.compile(
+    r"^\s*(?:"
+    r"(?:CHAPTER|SECTION|PART|APPENDIX|ANNEX|SCHEDULE|ARTICLE|RULE)\s+[A-Z0-9IVXivx]+"
+    r"|\d{1,2}(?:\.\d{1,2}){0,3}"
+    r")\s*[.:\)–—-]?\s+\S",
+    re.IGNORECASE,
+)
+
+SENTENCE_END = re.compile(r"[.!?:;,]$")
+URL_OR_EMAIL = re.compile(r"(https?://\S+|www\.\S+|\S+@\S+\.\S+)")
+REPEATED_PUNCT = re.compile(r"([^\w\s])\1{3,}")
+TOC_HEADING = re.compile(r"^\s*(table\s+of\s+contents|contents|index)\s*$", re.IGNORECASE)
 
 
-# ============================================================
-# 1. TEXT CLEANING & TOC FILTERING
-# ============================================================
+def normalize_unicode(text):
+    text = unicodedata.normalize("NFKC", text)
+    for source, target in LIGATURES.items():
+        text = text.replace(source, target)
+    for source, target in PUNCTUATION_MAP.items():
+        text = text.replace(source, target)
+    text = LEADER_RUN.sub("....", text)
+    text = LEADING_GLYPH.sub("• ", text)
+    text = text.replace("�", "")
+    return CONTROL_CHARS.sub("", text)
 
-def is_toc_page(page_text: str) -> bool:
-    """Detects if a page belongs to the Table of Contents."""
-    text_lower = page_text.lower()
-    
-    # Check for TOC headings
-    if "table of contents" in text_lower or "contents" in text_lower[:100]:
+
+def collapse_whitespace(text):
+    return MULTI_SPACE.sub(" ", text).strip()
+
+
+def strip_dot_leaders(text):
+    return DOT_LEADER.sub("", text).strip()
+
+
+def join_lines(lines):
+    parts = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        if parts and HYPHEN_BREAK.search(parts[-1]):
+            parts[-1] = parts[-1][:-1] + line
+        else:
+            parts.append(line)
+    text = " ".join(parts)
+    text = REPEATED_PUNCT.sub(r"\1", text)
+    return collapse_whitespace(text)
+
+
+def page_number_value(text):
+    candidate = collapse_whitespace(strip_dot_leaders(text))
+    if not candidate or len(candidate) > 16:
+        return None
+    for pattern in PAGE_NUMBER_PATTERNS:
+        match = pattern.match(candidate)
+        if match:
+            return candidate
+    return None
+
+
+def is_page_number(text):
+    return page_number_value(text) is not None
+
+
+def is_toc_line(text):
+    stripped = text.strip()
+    if TOC_HEADING.match(stripped):
         return True
-        
-    # Check for high density of dot leaders or page number patterns (e.g., "... 12")
-    dot_leader_count = len(re.findall(r"\.{3,}\s*\d+", page_text))
-    if dot_leader_count > 3:  # If more than 3 TOC-style lines exist, it's a TOC page
+    return bool(DOT_LEADER_LINE.match(stripped))
+
+
+def is_noise(text):
+    stripped = collapse_whitespace(text)
+    if not stripped:
         return True
-        
+    if len(stripped) <= 2 and not stripped.isdigit():
+        return True
+    letters = sum(character.isalpha() for character in stripped)
+    if letters == 0 and not URL_OR_EMAIL.search(stripped):
+        return True
+    if letters / max(len(stripped), 1) < 0.25 and len(stripped) < 40:
+        return True
     return False
 
-cleaned_pages = []
 
-# Process all pages (or set a limit if desired)
-for page_number, page in enumerate(pdf):
-    raw_text = page.get_text()
+def starts_list_item(text):
+    if URL_OR_EMAIL.match(text.strip()):
+        return False
+    return bool(BULLET_PREFIX.match(text))
 
-    # Skip Table of Contents pages entirely
-    if is_toc_page(raw_text):
-        print(f"Skipping Page {page_number + 1} (Detected as Table of Contents)")
-        continue
 
-    rect = page.rect
-    height = rect.height
+def looks_like_heading_text(text, max_words=18):
+    stripped = collapse_whitespace(text)
+    if not stripped or len(stripped) > 160:
+        return False
+    words = stripped.split()
+    if len(words) > max_words:
+        return False
+    if SENTENCE_END.search(stripped) and not stripped.endswith(":"):
+        return False
+    if NUMBERED_HEADING.match(stripped):
+        return True
+    alpha = [character for character in stripped if character.isalpha()]
+    if alpha and sum(character.isupper() for character in alpha) / len(alpha) > 0.75:
+        return True
+    if stripped.istitle() and len(words) <= 10:
+        return True
+    return False
 
-    # Spatial boundaries for Headers and Footers (Adjust percentages as needed)
-    top_margin = height * 0.08      # Top 8%
-    bottom_margin = height * 0.92   # Bottom 8%
 
-    blocks = page.get_text("blocks")
-    page_blocks = []
+def heading_level(text, size_rank=2):
+    stripped = collapse_whitespace(text)
+    if re.match(r"^(CHAPTER|PART|SECTION|APPENDIX|ANNEX|SCHEDULE)\b", stripped, re.IGNORECASE):
+        return 1
+    match = re.match(r"^(\d{1,2}(?:\.\d{1,2})*)", stripped)
+    if match:
+        return min(match.group(1).count(".") + 2, 6)
+    return size_rank
 
-    for b in blocks:
-        # b[6] == 0 means text block
-        if b[6] == 0:
-            block_y0, block_y1, block_text = b[1], b[3], b[4].strip()
 
-            # Ignore top/bottom header & footer zones
-            if block_y0 < top_margin or block_y1 > bottom_margin:
+def clean_block_text(text):
+    return collapse_whitespace(normalize_unicode(text))
+
+
+BOLD_FLAG = 1 << 4
+MARGIN_RATIO = 0.08
+CAPTION_PATTERN = re.compile(r"^(figure|fig\.?|table|chart|box|exhibit)\s*\d", re.IGNORECASE)
+LOWER_START = re.compile(r"^[a-z(]")
+SECTION_NUMBER_ONLY = re.compile(r"^\d{1,2}(?:\.\d{1,2})*\.$|^\d{1,2}(?:\.\d{1,2})+$")
+OPEN_END = re.compile(r"[,;:\-]$|\w$")
+
+
+def _line_info(line):
+    text = "".join(span["text"] for span in line["spans"])
+    spans = [span for span in line["spans"] if span["text"].strip()]
+    if not spans:
+        return None
+    size = max(round(span["size"], 1) for span in spans)
+    bold = any(
+        span["flags"] & BOLD_FLAG
+        or "bold" in span["font"].lower()
+        or "black" in span["font"].lower()
+        for span in spans
+    )
+    return {
+        "text": normalize_unicode(text),
+        "size": size,
+        "bold": bold,
+        "x0": line["bbox"][0],
+        "y0": line["bbox"][1],
+        "y1": line["bbox"][3],
+    }
+
+
+def _page_lines(page):
+    blocks = page.get_text("dict")["blocks"]
+    result = []
+    for block in sorted(blocks, key=lambda b: (round(b["bbox"][1], 1), b["bbox"][0])):
+        if block.get("type") != 0:
+            continue
+        lines = []
+        for line in block.get("lines", []):
+            info = _line_info(line)
+            if info:
+                lines.append(info)
+        if lines:
+            result.append(lines)
+    return result
+
+
+def _profile_document(pdf, start_index, end_index):
+    size_weights = Counter()
+    margin_texts = Counter()
+    page_count = end_index - start_index
+
+    for page_number in range(start_index, end_index):
+        page = pdf[page_number]
+        height = page.rect.height
+        for block_lines in _page_lines(page):
+            for line in block_lines:
+                text = clean_block_text(line["text"])
+                if not text:
+                    continue
+                size_weights[line["size"]] += len(text)
+                if line["y0"] < height * MARGIN_RATIO or line["y1"] > height * (1 - MARGIN_RATIO):
+                    if not page_number_value(text):
+                        margin_texts[text.lower()] += 1
+
+    body_size = size_weights.most_common(1)[0][0] if size_weights else 10.0
+    heading_sizes = sorted({size for size in size_weights if size > body_size * 1.05}, reverse=True)
+
+    threshold = max(3, int(page_count * 0.3))
+    repeated = {text for text, count in margin_texts.items() if count >= threshold}
+
+    return body_size, heading_sizes, repeated
+
+
+def _size_rank(size, body_size, heading_sizes):
+    if size <= body_size * 1.05:
+        return None
+    for index, heading_size in enumerate(heading_sizes[:4]):
+        if abs(size - heading_size) < 0.3:
+            return index + 1
+    return 3
+
+
+def _classify(text, line, body_size, heading_sizes):
+    if CAPTION_PATTERN.match(text):
+        return "caption", None
+    if starts_list_item(text):
+        return "list_item", None
+    rank = _size_rank(line["size"], body_size, heading_sizes)
+    if rank is not None and looks_like_heading_text(text, max_words=24):
+        return "heading", heading_level(text, rank)
+    if line["bold"] and looks_like_heading_text(text):
+        return "heading", heading_level(text, 3)
+    if NUMBERED_HEADING.match(text) and looks_like_heading_text(text, max_words=12):
+        return "heading", heading_level(text, 3)
+    return "paragraph", None
+
+
+def _extract_page(page, page_number, body_size, heading_sizes, repeated):
+    height = page.rect.height
+    elements = []
+    page_label = None
+    toc_hits = 0
+    current = None
+    pending_number = None
+
+    def flush():
+        nonlocal current
+        if current is None:
+            return
+        text = join_lines(current["lines"])
+        if text and not is_noise(text):
+            elements.append(
+                {
+                    "type": current["type"],
+                    "text": text,
+                    "level": current["level"],
+                    "page": page_number,
+                }
+            )
+        current = None
+
+    for block_lines in _page_lines(page):
+        for line in block_lines:
+            text = clean_block_text(line["text"])
+            if not text:
                 continue
 
-            # Filter standalone page numbers
-            if re.match(r"^(page\s+)?\d+(\s+of\s+\d+)?$", block_text, re.IGNORECASE):
+            if SECTION_NUMBER_ONLY.match(text):
+                pending_number = text.rstrip(".")
                 continue
 
-            # Clean extra internal white spaces and line breaks
-            clean_block = re.sub(r"\s+", " ", block_text)
-            page_blocks.append(clean_block)
+            if pending_number:
+                text = f"{pending_number}. {text}"
+                pending_number = None
 
-    if page_blocks:
-        page_content = "\n\n".join(page_blocks)
-        cleaned_pages.append({
-            "page": page_number + 1,
-            "text": page_content
-        })
+            in_margin = line["y0"] < height * MARGIN_RATIO or line["y1"] > height * (1 - MARGIN_RATIO)
 
-pdf.close()
+            label = page_number_value(text)
+            if label and (in_margin or not elements):
+                page_label = page_label or label
+                continue
 
-# Combine all valid cleaned text into a single document string
-full_cleaned_text = "\n\n".join([p["text"] for p in cleaned_pages])
+            if text.lower() in repeated:
+                continue
+
+            if is_toc_line(text):
+                toc_hits += 1
+                continue
+
+            kind, level = _classify(text, line, body_size, heading_sizes)
+
+            if kind == "heading":
+                adjacent = (
+                    current is not None
+                    and current["type"] == "heading"
+                    and current["level"] == level
+                    and line["y0"] - current["last_y1"] < line["size"] * 0.9
+                )
+                if adjacent:
+                    current["lines"].append(text)
+                    current["last_y1"] = line["y1"]
+                    continue
+                flush()
+                current = {
+                    "type": "heading",
+                    "level": level,
+                    "lines": [text],
+                    "last_y1": line["y1"],
+                    "size": line["size"],
+                }
+                continue
+
+            if kind == "caption":
+                flush()
+                current = {"type": "caption", "level": None, "lines": [text]}
+                flush()
+                continue
+
+            if kind == "list_item":
+                flush()
+                current = {"type": "list_item", "level": None, "lines": [text]}
+                continue
+
+            if current is not None and current["type"] in ("paragraph", "list_item"):
+                current["lines"].append(text)
+                continue
+
+            flush()
+            current = {"type": "paragraph", "level": None, "lines": [text]}
+
+        if current is not None and current["type"] == "paragraph":
+            if not OPEN_END.search(join_lines(current["lines"])):
+                flush()
+
+    flush()
+    return elements, page_label, toc_hits
 
 
-# ============================================================
-# 2. RAG CHUNKING (Sliding Window with Overlap)
-# ============================================================
+def _is_toc_page(elements, toc_hits):
+    if toc_hits >= 4:
+        return True
+    if not elements:
+        return False
+    head = " ".join(element["text"].lower() for element in elements[:2]).strip()
+    return toc_hits >= 2 and ("table of contents" in head or head.startswith("contents"))
 
-def chunk_text(text: str, chunk_size: int = 500, chunk_overlap: int = 100) -> list[str]:
-    """
-    Splits cleaned text into overlapping chunks by word count 
-    to preserve context for vector embeddings.
-    """
-    words = text.split()
-    chunks = []
-    
-    start = 0
-    while start < len(words):
-        end = start + chunk_size
-        chunk = " ".join(words[start:end])
-        chunks.append(chunk)
-        start += (chunk_size - chunk_overlap)
-        
-    return chunks
 
-# Execute Chunking
-chunks = chunk_text(full_cleaned_text, chunk_size=300, chunk_overlap=50)
+def extract_document(pdf_path, start_page=None, end_page=None, verbose=True):
+    pdf_path = Path(pdf_path)
+    if not pdf_path.exists():
+        raise FileNotFoundError(f"PDF not found: {pdf_path}")
 
-print(f"\n--- EXTRACTION COMPLETE ---")
-print(f"Total Cleaned Pages Processed: {len(cleaned_pages)}")
-print(f"Total RAG Chunks Generated: {len(chunks)}\n")
+    pdf = fitz.open(pdf_path)
+    try:
+        total_pages = len(pdf)
+        start_index = (start_page - 1) if start_page else 0
+        end_index = end_page if end_page else total_pages
 
-# Preview first 2 chunks
-for i, chunk in enumerate(chunks[:2]):
-    print(f"=== CHUNK {i + 1} ===")
-    print(chunk)
-    print("\n")
+        if start_index < 0:
+            raise ValueError("Start page must be 1 or greater.")
+        if end_index > total_pages:
+            raise ValueError(f"End page cannot exceed the PDF's {total_pages} pages.")
+        if start_index >= end_index:
+            raise ValueError("Start page must be less than or equal to end page.")
+
+        body_size, heading_sizes, repeated = _profile_document(pdf, start_index, end_index)
+
+        if verbose:
+            print(f"PDF: {pdf_path.name}")
+            print(f"Pages {start_index + 1}-{end_index} of {total_pages}")
+            print(f"Body font size: {body_size} | heading sizes: {heading_sizes[:4]}")
+            print(f"Repeated header/footer lines: {len(repeated)}")
+
+        pages = []
+        skipped = []
+        previous_tail = None
+
+        for page_number in range(start_index, end_index):
+            page = pdf[page_number]
+            elements, page_label, toc_hits = _extract_page(
+                page, page_number + 1, body_size, heading_sizes, repeated
+            )
+
+            if not elements:
+                skipped.append((page_number + 1, "no usable text"))
+                continue
+
+            if _is_toc_page(elements, toc_hits):
+                skipped.append((page_number + 1, "table of contents"))
+                continue
+
+            first = elements[0]
+            first["continues_previous_page"] = bool(
+                previous_tail
+                and previous_tail["type"] == "paragraph"
+                and first["type"] == "paragraph"
+                and OPEN_END.search(previous_tail["text"])
+                and LOWER_START.match(first["text"])
+            )
+
+            pages.append(
+                {
+                    "page": page_number + 1,
+                    "page_label": page_label,
+                    "blocks": elements,
+                }
+            )
+            previous_tail = elements[-1]
+
+        metadata = pdf.metadata or {}
+        title = (metadata.get("title") or "").strip() or pdf_path.stem.replace("_", " ").title()
+
+        document = {
+            "source": pdf_path.name,
+            "path": str(pdf_path),
+            "title": title,
+            "total_pages": total_pages,
+            "page_range": [start_index + 1, end_index],
+            "pages": pages,
+        }
+
+        if verbose:
+            block_count = sum(len(page["blocks"]) for page in pages)
+            headings = sum(
+                1 for page in pages for block in page["blocks"] if block["type"] == "heading"
+            )
+            print(f"Pages retained: {len(pages)} | blocks: {block_count} | headings: {headings}")
+            for page_number, reason in skipped:
+                print(f"  skipped page {page_number}: {reason}")
+
+        return document
+    finally:
+        pdf.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Extract structured blocks from a PDF")
+    parser.add_argument("pdf_path", type=Path)
+    parser.add_argument("--start-page", type=int, default=None)
+    parser.add_argument("--end-page", type=int, default=None)
+    parser.add_argument(
+        "--output", type=Path, default=Path("data/results/extracted.json")
+    )
+    args = parser.parse_args()
+
+    document = extract_document(args.pdf_path, args.start_page, args.end_page)
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    with open(args.output, "w", encoding="utf-8") as handle:
+        json.dump(document, handle, ensure_ascii=False, indent=2)
+
+    print(f"Saved to {args.output}")
+
+
+if __name__ == "__main__":
+    main()
