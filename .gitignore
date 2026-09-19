@@ -15,3 +15,8 @@ data/documents/*.docx
 # OS
 .DS_Store
 Thumbs.db
+
+# Generated ingestion output
+data/results/
+tests/
+*.sql

@@ -1,9 +1,17 @@
 supabase
 python-dotenv
-pypdf
+pymupdf
 tiktoken
 numpy
 fastapi
 uvicorn
 streamlit
 pytest
+
+# Local (free, offline) embeddings - EMBEDDING_PROVIDER=local
+torch
+transformers
+
+# Optional hosted embedding providers
+# google-genai   # EMBEDDING_PROVIDER=gemini (free tier)
+# openai         # EMBEDDING_PROVIDER=openai (paid)
