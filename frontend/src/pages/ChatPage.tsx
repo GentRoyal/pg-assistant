@@ -130,7 +130,7 @@ export function ChatPage() {
           className="shrink-0 border-t border-[var(--ui-line)] bg-white px-3 pt-3 md:px-6"
           style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
         >
-          <ChatInput disabled={isSending} onSend={(q) => void sendMessage(q)} />
+          <ChatInput disabled={isSending} onSend={(q, files) => void sendMessage(q, files)} />
           <p className="mx-auto mt-2 max-w-3xl px-1 text-center text-[11px] leading-snug text-[var(--ui-muted)]">
             Not an official University of Ibadan ruling. Confirm important matters with your department
             or Postgraduate College.
