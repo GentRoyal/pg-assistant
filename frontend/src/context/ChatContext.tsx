@@ -13,16 +13,27 @@ import {
   saveActiveId,
   saveConversations,
 } from '../lib/storage'
-import type { ChatMessage, Conversation, SourceChunk } from '../types'
+import type { ChatMessage, Conversation, MessageAttachment, SourceChunk } from '../types'
 import { useSettings } from './SettingsContext'
 
 function uid() {
   return crypto.randomUUID()
 }
 
-function titleFromQuestion(q: string) {
+function titleFromQuestion(q: string, files: File[]) {
   const t = q.trim().replace(/\s+/g, ' ')
-  return t.length > 42 ? `${t.slice(0, 42)}…` : t || 'New chat'
+  if (t) return t.length > 42 ? `${t.slice(0, 42)}…` : t
+  if (files[0]) return `Attachment: ${files[0].name}`
+  return 'New chat'
+}
+
+function toMessageAttachments(files: File[]): MessageAttachment[] {
+  return files.map((f) => ({
+    id: uid(),
+    name: f.name,
+    size: f.size,
+    type: f.type || 'application/octet-stream',
+  }))
 }
 
 function mapSources(
@@ -52,7 +63,7 @@ type ChatContextValue = {
   selectConversation: (id: string) => void
   deleteConversation: (id: string) => void
   renameConversation: (id: string, title: string) => void
-  sendMessage: (question: string) => Promise<void>
+  sendMessage: (question: string, files?: File[]) => Promise<void>
   clearAll: () => void
 }
 
@@ -117,9 +128,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [persist])
 
   const sendMessage = useCallback(
-    async (question: string) => {
+    async (question: string, files: File[] = []) => {
       const trimmed = question.trim()
-      if (!trimmed || isSending) return
+      if ((!trimmed && files.length === 0) || isSending) return
 
       let list = conversations
       let currentId = activeId
@@ -128,7 +139,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const now = new Date().toISOString()
         const created: Conversation = {
           id: uid(),
-          title: titleFromQuestion(trimmed),
+          title: titleFromQuestion(trimmed, files),
           createdAt: now,
           updatedAt: now,
           messages: [],
@@ -137,11 +148,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         currentId = created.id
       }
 
+      const attachments = toMessageAttachments(files)
       const userMsg: ChatMessage = {
         id: uid(),
         role: 'user',
-        content: trimmed,
+        content: trimmed || (files.length ? 'Please review the attached file(s).' : ''),
         createdAt: new Date().toISOString(),
+        attachments: attachments.length ? attachments : undefined,
       }
 
       list = list.map((c) => {
@@ -149,7 +162,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const isFirst = c.messages.length === 0
         return {
           ...c,
-          title: isFirst ? titleFromQuestion(trimmed) : c.title,
+          title: isFirst ? titleFromQuestion(trimmed, files) : c.title,
           updatedAt: new Date().toISOString(),
           messages: [...c.messages, userMsg],
         }
@@ -160,7 +173,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       try {
         const data = await askQuestion(
-          { question: trimmed, conversation_id: currentId },
+          {
+            question: trimmed || 'Please review the attached file(s) in light of UI academic regulations.',
+            conversation_id: currentId,
+            files,
+          },
           {
             apiBaseUrl: settings.apiBaseUrl,
             useMock: settings.useMockApi,

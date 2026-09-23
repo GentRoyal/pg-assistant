@@ -21,17 +21,36 @@ export async function askQuestion(
   payload: AskRequest,
   options: { apiBaseUrl?: string; useMock?: boolean },
 ): Promise<AskResponse> {
+  const files = payload.files ?? []
+
   if (options.useMock) {
     const { mockAsk } = await import('./mockAnswers')
-    return mockAsk(payload.question)
+    return mockAsk(payload.question, files)
   }
 
   const base = resolveApiBase(options.apiBaseUrl)
-  const res = await fetch(`${base}/ask`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
+
+  let res: Response
+  if (files.length > 0) {
+    const form = new FormData()
+    form.append('question', payload.question)
+    if (payload.conversation_id) form.append('conversation_id', payload.conversation_id)
+    for (const file of files) form.append('files', file)
+
+    res = await fetch(`${base}/ask`, {
+      method: 'POST',
+      body: form,
+    })
+  } else {
+    res = await fetch(`${base}/ask`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question: payload.question,
+        conversation_id: payload.conversation_id,
+      }),
+    })
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')

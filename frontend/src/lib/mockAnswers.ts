@@ -64,21 +64,32 @@ const LIBRARY: Array<{
   },
 ]
 
-function fallback(question: string): AskResponse {
+function fallback(question: string, files: File[] = []): AskResponse {
+  const fileNote =
+    files.length > 0
+      ? `\n\nI received your attachment${files.length > 1 ? 's' : ''}: ${files.map((f) => f.name).join(', ')}. When the backend is connected, I can use uploaded files together with the regulation knowledge base.`
+      : ''
+  const label = question.trim() || 'your upload'
   return {
-    answer: `I searched the academic regulation knowledge base for “${question.trim()}”, but I could not find a clear supporting section in the current documents.\n\nTry rephrasing with programme level (PGD, Master's, Ph.D.), the topic (registration, exams, fees, thesis), or a document name. I will only answer when the regulations support it—so you can trust what you see here.`,
+    answer: `I searched the academic regulation knowledge base for “${label}”, but I could not find a clear supporting section in the current documents.${fileNote}\n\nTry rephrasing with programme level (PGD, Master's, Ph.D.), the topic (registration, exams, fees, thesis), or a document name. I will only answer when the regulations support it—so you can trust what you see here.`,
     sources: [],
     confidence: 0.2,
   }
 }
 
-export async function mockAsk(question: string): Promise<AskResponse> {
+export async function mockAsk(question: string, files: File[] = []): Promise<AskResponse> {
   await new Promise((r) => setTimeout(r, 700 + Math.random() * 500))
   const q = question.toLowerCase()
   const hit = LIBRARY.find((item) => item.keywords.some((k) => q.includes(k)))
-  if (!hit) return fallback(question)
+
+  const attachmentNote =
+    files.length > 0
+      ? `\n\n📎 Noted attachment${files.length > 1 ? 's' : ''}: ${files.map((f) => `“${f.name}”`).join(', ')}. In demo mode I acknowledge uploads; your teammate’s API can process them via multipart \`files\` on \`POST /ask\`.`
+      : ''
+
+  if (!hit) return fallback(question, files)
   return {
-    answer: hit.answer,
+    answer: hit.answer + attachmentNote,
     sources: hit.sources,
     confidence: hit.confidence,
   }
