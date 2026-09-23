@@ -86,6 +86,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const now = new Date().toISOString()
     const conversation: Conversation = {
       id: uid(),
+      serverId: null,
       title: 'New chat',
       createdAt: now,
       updatedAt: now,
@@ -139,6 +140,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const now = new Date().toISOString()
         const created: Conversation = {
           id: uid(),
+          serverId: null,
           title: titleFromQuestion(trimmed, files),
           createdAt: now,
           updatedAt: now,
@@ -171,12 +173,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       persist(list, currentId)
       setIsSending(true)
 
+      const serverId = list.find((c) => c.id === currentId)?.serverId ?? null
+
       try {
         const data = await askQuestion(
           {
             question: trimmed || 'Please review the attached file(s) in light of UI academic regulations.',
-            conversation_id: currentId,
+            conversation_id: serverId,
             files,
+            llmProvider: settings.llmProvider,
+            llmModel: settings.llmModel,
           },
           {
             apiBaseUrl: settings.apiBaseUrl,
@@ -197,6 +203,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           c.id === currentId
             ? {
                 ...c,
+                serverId: data.conversation_id ?? c.serverId ?? null,
                 updatedAt: new Date().toISOString(),
                 messages: [...c.messages, assistantMsg],
               }
@@ -229,7 +236,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setIsSending(false)
       }
     },
-    [activeId, conversations, isSending, persist, settings.apiBaseUrl, settings.useMockApi],
+    [
+      activeId,
+      conversations,
+      isSending,
+      persist,
+      settings.apiBaseUrl,
+      settings.useMockApi,
+      settings.llmProvider,
+      settings.llmModel,
+    ],
   )
 
   const activeConversation = useMemo(

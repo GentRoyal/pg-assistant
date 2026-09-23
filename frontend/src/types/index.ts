@@ -29,18 +29,58 @@ export type ChatMessage = {
 
 export type Conversation = {
   id: string
+  /** Id assigned by the API on the first reply; null until then */
+  serverId?: string | null
   title: string
   createdAt: string
   updatedAt: string
   messages: ChatMessage[]
 }
 
+/** 'default' leaves the choice to the server's LLM_PROVIDER setting */
+export type LlmProvider = 'default' | 'local' | 'gemini' | 'openai'
+
+export const LLM_PROVIDERS: Array<{ value: LlmProvider; label: string; hint: string }> = [
+  { value: 'default', label: 'Server default', hint: 'Whatever the API is configured with' },
+  { value: 'local', label: 'Local (Ollama)', hint: 'Free, needs Ollama running' },
+  { value: 'gemini', label: 'Gemini', hint: 'Free tier, needs a key on the server' },
+  { value: 'openai', label: 'OpenAI', hint: 'Paid, needs a key on the server' },
+]
+
 export type AskRequest = {
   question: string
-  conversation_id?: string
+  /** Server-side conversation id, not the local one */
+  conversation_id?: string | null
   files?: File[]
+  llmProvider?: LlmProvider
+  llmModel?: string
 }
 
+/** Raw citation as returned by POST /chat */
+export type ApiCitation = {
+  index: number
+  chunk_id?: string | null
+  source?: string | null
+  title?: string | null
+  section_title?: string | null
+  page_start?: number | null
+  page_end?: number | null
+  similarity?: number | null
+  content?: string | null
+}
+
+/** Raw body of POST /chat */
+export type ChatApiResponse = {
+  conversation_id: string
+  question: string
+  search_query: string
+  answer: string
+  citations: ApiCitation[]
+  llm: string
+  latency_ms: number
+}
+
+/** Normalised shape the UI consumes, whether it came from the API or the mock */
 export type AskResponse = {
   answer: string
   sources: Array<{
@@ -52,6 +92,16 @@ export type AskResponse = {
   }>
   confidence?: number
   conversation_id?: string
+  llm?: string
+  searchQuery?: string
+  latencyMs?: number
+}
+
+export type HealthResponse = {
+  status: string
+  embedding: string
+  embedding_dimensions: number
+  llm_providers: string[]
 }
 
 export type AppSettings = {
@@ -61,6 +111,8 @@ export type AppSettings = {
   showChunks: boolean
   showConfidence: boolean
   disclaimerAccepted: boolean
+  llmProvider: LlmProvider
+  llmModel: string
 }
 
 /** Allowed upload types for the chat composer */

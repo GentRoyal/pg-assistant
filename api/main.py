@@ -1,4 +1,5 @@
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -8,13 +9,27 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from generation.answer_generator import LLM_DEFAULTS, AnswerGenerator, ConversationStore, LLMClient
-from ingestion.chunk_embedder import Embedder
 from retrieval.retriever import DEFAULT_MATCH_COUNT, DEFAULT_THRESHOLD, Retriever
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # The local embedding model takes ~15s to load. Do it at boot so the first
+    # question does not look like it has hung.
+    retriever = get_retriever()
+    try:
+        retriever.embedder.embed_query("warm up")
+        print(f"Embedding model ready: {retriever.embedder.provider}/{retriever.embedder.model}")
+    except Exception as error:
+        print(f"Embedding warm-up failed, will retry on first request: {error}")
+    yield
+
 
 app = FastAPI(
     title="UI Academic Regulation Assistant",
     description="Retrieval and grounded question answering over university regulation documents",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -70,6 +85,7 @@ class Citation(BaseModel):
     page_start: int | None = None
     page_end: int | None = None
     similarity: float | None = None
+    content: str | None = None
 
 
 class ChatResponse(BaseModel):

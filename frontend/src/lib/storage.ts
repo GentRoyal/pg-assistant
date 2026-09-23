@@ -41,11 +41,13 @@ export function saveActiveId(id: string | null) {
 
 export const defaultSettings = (): AppSettings => ({
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || 'http://localhost:8000',
-  useMockApi: String(import.meta.env.VITE_USE_MOCK_API ?? 'true') === 'true',
+  useMockApi: String(import.meta.env.VITE_USE_MOCK_API ?? 'false') === 'true',
   showSources: true,
   showChunks: true,
   showConfidence: true,
   disclaimerAccepted: false,
+  llmProvider: 'default',
+  llmModel: '',
 })
 
 export function loadSettings(): AppSettings {

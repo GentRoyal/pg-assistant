@@ -266,6 +266,21 @@ def _env(*names):
     return None
 
 
+def _env_model(provider_var, model_var, provider):
+    """
+    The configured model only belongs to the configured provider. Without this,
+    EMBEDDING_MODEL would follow a provider it does not belong to.
+    """
+    model = os.getenv(model_var)
+    if not model:
+        return None
+
+    configured = (os.getenv(provider_var) or "").lower()
+    if configured and configured != provider:
+        return None
+    return model
+
+
 class Embedder:
     def __init__(self, provider=None, model=None, dimensions=None, batch_size=None):
         self.provider = (provider or os.getenv("EMBEDDING_PROVIDER") or "local").lower()
@@ -276,7 +291,11 @@ class Embedder:
             )
 
         defaults = PROVIDER_DEFAULTS[self.provider]
-        self.model = model or os.getenv("EMBEDDING_MODEL") or defaults["model"]
+        self.model = (
+            model
+            or _env_model("EMBEDDING_PROVIDER", "EMBEDDING_MODEL", self.provider)
+            or defaults["model"]
+        )
         self.dimensions = int(
             dimensions or os.getenv("EMBEDDING_DIMENSIONS") or defaults["dimensions"]
         )

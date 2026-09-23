@@ -27,6 +27,7 @@ RETRY_BASE_DELAY = 2.0
 RECENT_TURNS = 6
 HISTORY_CHAR_BUDGET = 6000
 CONTEXT_CHAR_BUDGET = 12000
+CITATION_CHAR_LIMIT = 1200
 
 CONVERSATIONS_TABLE = "conversations"
 MESSAGES_TABLE = "conversation_messages"
@@ -40,6 +41,22 @@ def _env(*names):
     return None
 
 
+def _env_model(provider_var, model_var, provider):
+    """
+    The configured model only belongs to the configured provider. Without this,
+    LLM_MODEL=gpt-4o-mini would also be sent to Gemini when a request overrides
+    the provider.
+    """
+    model = os.getenv(model_var)
+    if not model:
+        return None
+
+    configured = (os.getenv(provider_var) or "").lower()
+    if configured and configured != provider:
+        return None
+    return model
+
+
 class LLMClient:
     def __init__(self, provider=None, model=None, temperature=0.2, max_tokens=800):
         self.provider = (provider or os.getenv("LLM_PROVIDER") or "local").lower()
@@ -49,7 +66,7 @@ class LLMClient:
             )
 
         defaults = LLM_DEFAULTS[self.provider]
-        self.model = model or os.getenv("LLM_MODEL") or defaults["model"]
+        self.model = model or _env_model("LLM_PROVIDER", "LLM_MODEL", self.provider) or defaults["model"]
         self.base_url = os.getenv("LOCAL_LLM_BASE_URL") or defaults["base_url"]
         self.temperature = temperature
         self.max_completion_tokens = max_tokens
@@ -294,6 +311,7 @@ class AnswerGenerator:
                 "page_start": result.get("page_start"),
                 "page_end": result.get("page_end"),
                 "similarity": result.get("similarity"),
+                "content": (result.get("content") or "")[:CITATION_CHAR_LIMIT],
             }
             for position, result in enumerate(results, start=1)
         ]
