@@ -9,8 +9,8 @@ streamlit
 pytest
 
 # Local (free, offline) embeddings - EMBEDDING_PROVIDER=local
-torch
-transformers
+#torch
+#transformers
 
 # OCR for scanned PDFs (no system Tesseract needed)
 rapidocr-onnxruntime
