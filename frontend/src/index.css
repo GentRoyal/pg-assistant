@@ -55,6 +55,12 @@ textarea {
   outline-offset: 2px;
 }
 
+/* Composer text field: no harsh box — parent form shows focus instead */
+textarea#chat-input:focus,
+textarea#chat-input:focus-visible {
+  outline: none;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

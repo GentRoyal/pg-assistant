@@ -46,6 +46,7 @@ export function ChatInput({ disabled, compact = false, onSend }: Props) {
   const [files, setFiles] = useState<File[]>([])
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [focused, setFocused] = useState(false)
   const ref = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const inputId = useId()
@@ -136,8 +137,12 @@ export function ChatInput({ disabled, compact = false, onSend }: Props) {
         setDragging(false)
         if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files)
       }}
-      className={`mx-auto w-full max-w-3xl rounded-2xl border bg-[var(--ui-soft)] p-1.5 sm:bg-white sm:p-2 sm:shadow-sm ${
-        dragging ? 'border-[var(--ui-navy)] ring-2 ring-[var(--ui-navy)]/20' : 'border-[var(--ui-line)]'
+      className={`mx-auto w-full max-w-3xl rounded-2xl border bg-[var(--ui-soft)] p-1.5 transition-[border-color,box-shadow] sm:bg-white sm:p-2 sm:shadow-sm ${
+        dragging
+          ? 'border-[var(--ui-navy)] shadow-[0_0_0_3px_color-mix(in_srgb,var(--ui-navy)_12%,transparent)]'
+          : focused
+            ? 'border-[color-mix(in_srgb,var(--ui-navy)_35%,var(--ui-line))] shadow-[0_0_0_3px_color-mix(in_srgb,var(--ui-navy)_8%,transparent)]'
+            : 'border-[var(--ui-line)]'
       }`}
       aria-label="Ask a question"
     >
@@ -210,12 +215,14 @@ export function ChatInput({ disabled, compact = false, onSend }: Props) {
           disabled={disabled}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={onKeyDown}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           placeholder={
             files.length
               ? 'Add a question about your attachment…'
               : 'Ask about registration, exams, thesis…'
           }
-          className="max-h-40 min-h-[44px] flex-1 resize-none border-0 bg-transparent px-2 py-2.5 text-[16px] leading-snug text-[var(--ui-ink)] outline-none placeholder:text-[var(--ui-muted)] disabled:opacity-60 sm:px-3 sm:text-[15px]"
+          className="max-h-40 min-h-[44px] flex-1 resize-none border-0 bg-transparent px-2 py-2.5 text-[16px] leading-snug text-[var(--ui-ink)] outline-none ring-0 placeholder:text-[var(--ui-muted)] focus:outline-none focus:ring-0 focus-visible:outline-none disabled:opacity-60 sm:px-3 sm:text-[15px]"
         />
         <Button
           type="submit"
