@@ -1,3 +1,15 @@
+export type User = {
+  id: string
+  name: string
+  email: string
+  role: 'student' | 'staff' | 'demo'
+}
+
+export type AuthSession = {
+  token: string
+  user: User
+}
+
 export type MessageAttachment = {
   id: string
   name: string

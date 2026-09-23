@@ -19,7 +19,7 @@ export class ApiError extends Error {
 
 export async function askQuestion(
   payload: AskRequest,
-  options: { apiBaseUrl?: string; useMock?: boolean },
+  options: { apiBaseUrl?: string; useMock?: boolean; token?: string },
 ): Promise<AskResponse> {
   const files = payload.files ?? []
 
@@ -29,6 +29,7 @@ export async function askQuestion(
   }
 
   const base = resolveApiBase(options.apiBaseUrl)
+  const authHeaders = options.token ? { Authorization: `Bearer ${options.token}` } : {}
 
   let res: Response
   if (files.length > 0) {
@@ -39,12 +40,13 @@ export async function askQuestion(
 
     res = await fetch(`${base}/ask`, {
       method: 'POST',
+      headers: { ...authHeaders },
       body: form,
     })
   } else {
     res = await fetch(`${base}/ask`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify({
         question: payload.question,
         conversation_id: payload.conversation_id,

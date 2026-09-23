@@ -1,5 +1,6 @@
-import { MessageSquarePlus, Settings, Trash2 } from 'lucide-react'
+import { LogOut, MessageSquarePlus, Settings, Trash2 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
 import { useChat } from '../../context/ChatContext'
 import { Button } from '../ui/Button'
 
@@ -9,6 +10,7 @@ type Props = {
 }
 
 export function Sidebar({ open, onClose }: Props) {
+  const { user, logout } = useAuth()
   const {
     conversations,
     activeConversation,
