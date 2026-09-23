@@ -102,6 +102,51 @@ Settings.
 
 ## Deploy
 
-- **Local:** `npm run dev` / `npm run build && npm run preview`
-- **Vercel:** import the repo, set Root Directory to `frontend`, build `npm run build`, output `dist`
-- **GitHub Pages:** build and publish `dist` (set Vite `base` if needed)
+Two separate services:
+
+| Service | Hosts | Runs |
+| --- | --- | --- |
+| Vercel | this `frontend/` | the static build from `npm run build` |
+| Render | the repo root | `uvicorn api.main:app --host 0.0.0.0 --port $PORT` |
+
+### Vercel
+
+Set in the project's environment variables:
+
+```
+VITE_API_BASE_URL=https://<your-api>.onrender.com
+VITE_USE_MOCK_API=false
+```
+
+`VITE_API_BASE_URL` is inlined at build time, so changing it requires a
+redeploy. It must point at the **API**, not at the frontend's own URL — pointing
+it at the Vercel domain is what produces
+`Could not reach the API at https://<frontend>.vercel.app`.
+
+The `server.proxy` block in `vite.config.ts` is the **dev server only**. It does
+not exist in a production build, so `/api/...` paths are not proxied on Vercel.
+The deployed app talks to the API host directly; CORS is open on the API.
+
+### Render
+
+Use `render.yaml` at the repo root, or configure by hand:
+
+- Build: `pip install -r requirements-api.txt`
+- Start: `uvicorn api.main:app --host 0.0.0.0 --port $PORT`
+- Health check: `/health`
+
+Binding `0.0.0.0` and `$PORT` is required; a hardcoded `--port 8000` is not
+reachable on Render.
+
+Do **not** run the frontend on Render with `npm run dev`. The Vite dev server
+answers every path with `index.html`, so `/health` and `/chat` return the SPA
+instead of the API, and nothing ever reaches FastAPI.
+
+### Memory
+
+With `EMBEDDING_PROVIDER=local` the API process measures about **400 MB** RSS
+(torch plus bge-small), which does not fit Render's 512 MB free instance. Either
+run a paid instance and install the full `requirements.txt`, or set
+`EMBEDDING_PROVIDER=openai` with `EMBEDDING_DIMENSIONS=384` so torch is never
+imported. Switching embedding models means re-ingesting every document, because
+vectors from different models are not comparable.

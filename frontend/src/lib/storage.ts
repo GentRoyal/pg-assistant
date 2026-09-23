@@ -54,8 +54,13 @@ export function saveActiveId(id: string | null) {
   else localStorage.setItem(KEYS.activeId, id)
 }
 
+export function envApiBaseUrl() {
+  return import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || 'http://localhost:8000'
+}
+
 export const defaultSettings = (): AppSettings => ({
-  apiBaseUrl: import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || 'http://localhost:8000',
+  apiBaseUrl: envApiBaseUrl(),
+  apiBaseUrlEdited: false,
   useMockApi: String(import.meta.env.VITE_USE_MOCK_API ?? 'false') === 'true',
   showSources: true,
   showChunks: true,
@@ -69,7 +74,15 @@ export function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(KEYS.settings)
     if (!raw) return defaultSettings()
-    return { ...defaultSettings(), ...(JSON.parse(raw) as Partial<AppSettings>) }
+
+    const saved = JSON.parse(raw) as Partial<AppSettings>
+    const merged = { ...defaultSettings(), ...saved }
+
+    // A redeploy must be able to change the API URL. Without this, a value
+    // cached in the browser from an earlier build wins forever.
+    if (!saved.apiBaseUrlEdited) merged.apiBaseUrl = envApiBaseUrl()
+
+    return merged
   } catch {
     return defaultSettings()
   }

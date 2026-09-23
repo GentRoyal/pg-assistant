@@ -118,6 +118,8 @@ export type HealthResponse = {
 
 export type AppSettings = {
   apiBaseUrl: string
+  /** True once the user edits the base URL by hand; until then the build-time env wins */
+  apiBaseUrlEdited: boolean
   useMockApi: boolean
   showSources: boolean
   showChunks: boolean

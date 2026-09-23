@@ -1,0 +1,17 @@
+# Runtime dependencies for the deployed API only.
+#
+# Ingestion (pymupdf, rapidocr, torch, transformers) is deliberately absent:
+# documents are ingested from a developer machine, and the server only queries
+# what is already in Supabase. Keeping torch out is what makes the API fit a
+# small instance.
+#
+# This works only with EMBEDDING_PROVIDER=openai or gemini. With
+# EMBEDDING_PROVIDER=local the server needs torch + transformers, so deploy
+# requirements.txt instead and give it at least 1 GB of memory.
+
+fastapi
+uvicorn
+supabase
+python-dotenv
+openai
+tiktoken

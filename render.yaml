@@ -1,0 +1,53 @@
+# Render blueprint for the FastAPI backend.
+#
+# This deploys the API only. The frontend is a static build on Vercel and does
+# not belong on Render — `npm run dev` there serves the Vite dev server, which
+# answers every path with index.html and never reaches FastAPI.
+#
+# Memory: with EMBEDDING_PROVIDER=local the process measures ~400 MB RSS
+# (torch + bge-small), which does not fit the 512 MB free instance. Either use
+# a paid instance with requirements.txt, or set EMBEDDING_PROVIDER=openai and
+# re-ingest so the server never imports torch. See frontend/README.md.
+
+services:
+  - type: web
+    name: pg-assistant-api
+    runtime: python
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+
+    buildCommand: pip install --no-cache-dir -r requirements-api.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+
+      # Embeddings must match the vector(N) size of document_chunks.embedding.
+      # openai + 384 dimensions keeps the existing column, but every chunk has
+      # to be re-ingested because bge and openai vectors are not comparable.
+      - key: EMBEDDING_PROVIDER
+        value: openai
+      - key: EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: EMBEDDING_DIMENSIONS
+        value: "384"
+
+      - key: LLM_PROVIDER
+        value: openai
+      - key: LLM_MODEL
+        value: gpt-4o-mini
+
+      - key: RETRIEVAL_MATCH_COUNT
+        value: "8"
+      - key: RETRIEVAL_SIMILARITY_THRESHOLD
+        value: "0.3"
+
+      # Set these in the Render dashboard, not here.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
