@@ -89,11 +89,11 @@ export function Sidebar({ open, onClose }: Props) {
                           selectConversation(c.id)
                           closeIfMobile()
                         }}
-                        className={`w-full rounded-xl px-3 py-2.5 pr-11 text-left text-sm transition ${
-                          active ? 'bg-white/15 text-white' : 'text-white/80 hover:bg-white/10'
-                        }`}
-                      >
-                        <span className="line-clamp-2">{c.title}</span>
+                      className={`w-full rounded-xl px-3 py-2 pr-11 text-left text-xs leading-snug transition sm:text-[13px] ${
+                        active ? 'bg-white/15 text-white' : 'text-white/80 hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="line-clamp-2">{c.title}</span>
                       </button>
                       <button
                         type="button"
