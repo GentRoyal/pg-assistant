@@ -5,7 +5,7 @@ tiktoken
 numpy
 fastapi
 uvicorn
-streamlit
+#streamlit
 pytest
 
 # Local (free, offline) embeddings - EMBEDDING_PROVIDER=local
@@ -13,7 +13,7 @@ pytest
 #transformers
 
 # OCR for scanned PDFs (no system Tesseract needed)
-rapidocr-onnxruntime
+# rapidocr-onnxruntime
 
 # OpenAI-compatible client: used for LLM_PROVIDER=openai and for
 # LLM_PROVIDER=local talking to Ollama / LM Studio
