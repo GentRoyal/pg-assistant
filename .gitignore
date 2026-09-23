@@ -9,6 +9,11 @@ __pycache__/
 data/documents/*.pdf
 data/documents/*.docx
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
 # IDE
 .vscode/
 
