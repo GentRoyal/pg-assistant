@@ -9,6 +9,7 @@ from ingestion.chunk_embedder import (
     DEFAULT_MIN_TOKENS,
     DEFAULT_OVERLAP_TOKENS,
 )
+from ingestion.pdf_extractor import OCR_DPI
 from ingestion.pipeline import DOCUMENT_ATTRIBUTES, ingest_directory, ingest_pdf
 
 
@@ -32,6 +33,13 @@ def main():
     parser.add_argument("--no-embed", action="store_true", help="Structure only, skip embeddings")
     parser.add_argument("--force", action="store_true", help="Re-ingest even if unchanged")
     parser.add_argument("--no-save", action="store_true", help="Skip writing intermediate JSON")
+    parser.add_argument(
+        "--ocr",
+        choices=("auto", "always", "never"),
+        default="auto",
+        help="OCR scanned pages (auto: only pages with no text layer)",
+    )
+    parser.add_argument("--ocr-dpi", type=int, default=OCR_DPI)
 
     for attribute in DOCUMENT_ATTRIBUTES:
         parser.add_argument(f"--{attribute.replace('_', '-')}", default=None)
@@ -45,6 +53,8 @@ def main():
         "save_intermediate": not args.no_save,
         "dry_run": args.dry_run,
         "embed": not args.no_embed,
+        "ocr": args.ocr,
+        "ocr_dpi": args.ocr_dpi,
         "force": args.force,
         "attributes": {name: getattr(args, name) for name in DOCUMENT_ATTRIBUTES},
     }
