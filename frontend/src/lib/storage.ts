@@ -4,7 +4,18 @@ const KEYS = {
   conversations: 'ui-ara.conversations',
   settings: 'ui-ara.settings',
   activeId: 'ui-ara.activeConversationId',
+  sidebarOpen: 'ui-ara.sidebarOpenDesktop',
 } as const
+
+export function loadDesktopSidebarOpen(): boolean {
+  const raw = localStorage.getItem(KEYS.sidebarOpen)
+  if (raw === null) return true
+  return raw === 'true'
+}
+
+export function saveDesktopSidebarOpen(open: boolean) {
+  localStorage.setItem(KEYS.sidebarOpen, String(open))
+}
 
 export function loadConversations(): Conversation[] {
   try {

@@ -8,41 +8,36 @@ import { MessageBubble } from '../components/chat/MessageBubble'
 import { Sidebar } from '../components/layout/Sidebar'
 import { Button } from '../components/ui/Button'
 import { useChat } from '../context/ChatContext'
+import { loadDesktopSidebarOpen, saveDesktopSidebarOpen } from '../lib/storage'
 
-function useIsDesktop() {
-  const [isDesktop, setIsDesktop] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : true,
-  )
+const DESKTOP_MQ = '(min-width: 1024px)'
 
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1024px)')
-    const onChange = () => setIsDesktop(mq.matches)
-    onChange()
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
-
-  return isDesktop
+function initialSidebarOpen() {
+  if (typeof window === 'undefined') return true
+  return window.matchMedia(DESKTOP_MQ).matches ? loadDesktopSidebarOpen() : false
 }
 
 export function ChatPage() {
   const { activeConversation, isSending, sendMessage } = useChat()
-  const isDesktop = useIsDesktop()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(initialSidebarOpen)
   const bottomRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLDivElement>(null)
   const messages = activeConversation?.messages ?? []
 
-  // Desktop: keep sidebar open; mobile: closed by default
   useEffect(() => {
-    setSidebarOpen(isDesktop)
-  }, [isDesktop])
+    const mq = window.matchMedia(DESKTOP_MQ)
+    const onChange = () => {
+      if (mq.matches) setSidebarOpen(loadDesktopSidebarOpen())
+      else setSidebarOpen(false)
+    }
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages.length, isSending])
 
-  // Keep composer visible above mobile soft keyboard
   useEffect(() => {
     const vv = window.visualViewport
     if (!vv) return
@@ -63,9 +58,20 @@ export function ChatPage() {
     }
   }, [])
 
+  const setOpen = (open: boolean) => {
+    setSidebarOpen(open)
+    if (window.matchMedia(DESKTOP_MQ).matches) saveDesktopSidebarOpen(open)
+  }
+
+  const toggleSidebar = () => setOpen(!sidebarOpen)
+
   return (
     <div className="flex h-dvh max-h-dvh overflow-hidden bg-[var(--ui-canvas)]">
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar
+        open={sidebarOpen}
+        onClose={() => setOpen(false)}
+        onToggleDesktop={() => setOpen(false)}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header
@@ -74,9 +80,11 @@ export function ChatPage() {
         >
           <Button
             variant="secondary"
-            className="!min-h-11 !min-w-11 !shrink-0 !px-0 lg:hidden"
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Open sidebar"
+            className="!min-h-11 !min-w-11 !shrink-0 !px-0"
+            onClick={toggleSidebar}
+            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            aria-expanded={sidebarOpen}
+            title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
           >
             <PanelLeft size={18} />
           </Button>
