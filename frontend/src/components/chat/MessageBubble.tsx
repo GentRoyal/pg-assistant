@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { BookOpen, ChevronDown, ChevronUp } from 'lucide-react'
+import { BookOpen, ChevronDown, ChevronUp, FileText, Image as ImageIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ChatMessage } from '../../types'
 import { useSettings } from '../../context/SettingsContext'
@@ -12,6 +12,12 @@ function ConfidenceBadge({ value }: { value: number }) {
       {label} · {pct}%
     </span>
   )
+}
+
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function usePreferCollapsedSources() {
@@ -32,6 +38,7 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
   const [openSources, setOpenSources] = useState(!preferCollapsed)
   const isUser = message.role === 'user'
   const hasSources = Boolean(message.sources?.length)
+  const hasAttachments = Boolean(message.attachments?.length)
 
   useEffect(() => {
     setOpenSources(!preferCollapsed)
@@ -62,7 +69,31 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
           </div>
         ) : null}
 
-        <div className="prose-answer break-words text-[0.95rem]">{message.content}</div>
+        {hasAttachments ? (
+          <ul className="mb-2 flex flex-wrap gap-1.5" aria-label="Attached files">
+            {message.attachments!.map((file) => {
+              const isImage = file.type.startsWith('image/')
+              return (
+                <li
+                  key={file.id}
+                  className={`inline-flex max-w-full items-center gap-1.5 rounded-lg px-2 py-1 text-xs ${
+                    isUser ? 'bg-white/15 text-white' : 'bg-[var(--ui-soft)] text-[var(--ui-navy)]'
+                  }`}
+                >
+                  {isImage ? <ImageIcon size={12} aria-hidden /> : <FileText size={12} aria-hidden />}
+                  <span className="truncate font-medium">{file.name}</span>
+                  <span className={isUser ? 'text-white/70' : 'text-[var(--ui-muted)]'}>
+                    {formatSize(file.size)}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        ) : null}
+
+        {message.content ? (
+          <div className="prose-answer break-words text-[0.95rem]">{message.content}</div>
+        ) : null}
 
         {!isUser && !message.isError && settings.showConfidence && typeof message.confidence === 'number' ? (
           <div className="mt-3">
