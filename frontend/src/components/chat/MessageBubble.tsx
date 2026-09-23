@@ -65,7 +65,7 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
         {!isUser && !message.isError ? (
           <div className="mb-2 flex items-center gap-2">
             <img src="/ui-logo.png" alt="" width={20} height={20} className="rounded-sm object-contain" />
-            <span className="text-xs font-semibold text-[var(--ui-navy)]">UI Assistant</span>
+            <span className="text-xs font-semibold text-[var(--ui-navy)]">PG Assistant</span>
           </div>
         ) : null}
 
