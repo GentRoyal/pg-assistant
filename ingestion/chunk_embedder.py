@@ -304,8 +304,16 @@ class Embedder:
 
     def _local_model(self):
         if self._client is None:
-            import torch
-            from transformers import AutoModel, AutoTokenizer
+            try:
+                import torch
+                from transformers import AutoModel, AutoTokenizer
+            except ImportError as error:
+                raise RuntimeError(
+                    f"EMBEDDING_PROVIDER=local needs torch and transformers, which are not "
+                    f"installed ({error}). Either install requirements.txt on an instance with "
+                    f"at least 1 GB of memory, or set EMBEDDING_PROVIDER=openai with "
+                    f"EMBEDDING_DIMENSIONS=384 and re-ingest the documents."
+                ) from error
 
             tokenizer = AutoTokenizer.from_pretrained(self.model)
             model = AutoModel.from_pretrained(self.model)
@@ -323,9 +331,10 @@ class Embedder:
         return ""
 
     def _embed_local(self, texts, task_type):
-        import torch
-
+        # _local_model() first: it turns a missing torch into a readable error.
         tokenizer, model, device = self._local_model()
+
+        import torch
 
         if task_type == "RETRIEVAL_QUERY":
             prefix = self._local_query_prefix()

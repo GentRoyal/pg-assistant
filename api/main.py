@@ -4,8 +4,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from generation.answer_generator import LLM_DEFAULTS, AnswerGenerator, ConversationStore, LLMClient
@@ -15,14 +16,45 @@ from retrieval.retriever import DEFAULT_MATCH_COUNT, DEFAULT_THRESHOLD, Retrieve
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # The local embedding model takes ~15s to load. Do it at boot so the first
-    # question does not look like it has hung.
+    # question does not look like it has hung, and so /health can report
+    # whether embeddings actually work rather than just echoing the config.
     retriever = get_retriever()
     try:
         retriever.embedder.embed_query("warm up")
+        app.state.embedding_error = None
         print(f"Embedding model ready: {retriever.embedder.provider}/{retriever.embedder.model}")
     except Exception as error:
-        print(f"Embedding warm-up failed, will retry on first request: {error}")
+        app.state.embedding_error = str(error)
+        print(f"EMBEDDINGS ARE NOT WORKING: {error}")
+
+    app.state.embedding_mismatch = _check_stored_vectors(retriever)
+    if app.state.embedding_mismatch:
+        print(f"WARNING: {app.state.embedding_mismatch}")
     yield
+
+
+def _check_stored_vectors(retriever):
+    """
+    Vectors from different embedding models are not comparable, so querying with
+    one model against chunks embedded with another returns plausible-looking
+    nonsense. Catch that at boot rather than in someone's search results.
+    """
+    try:
+        rows = retriever.client.table("documents").select("embedding_model").execute().data or []
+    except Exception:
+        return None
+
+    current = f"{retriever.embedder.provider}/{retriever.embedder.model}"
+    stored = sorted({row["embedding_model"] for row in rows if row.get("embedding_model")})
+    stale = [model for model in stored if model != current]
+    if not stale:
+        return None
+
+    return (
+        f"Stored vectors were built with {', '.join(stale)} but queries use {current}. "
+        f"Re-ingest the documents (scripts/ingest_documents.py --force) or switch the "
+        f"embedding settings back."
+    )
 
 
 app = FastAPI(
@@ -38,6 +70,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_error(request: Request, error: Exception):
+    """
+    Starlette returns unhandled 500s from outside the CORS middleware, so the
+    browser blocks them and the caller sees a generic network failure instead of
+    the real error. Handling them here keeps the CORS headers on the response.
+    """
+    print(f"Unhandled error on {request.url.path}: {type(error).__name__}: {error}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"{type(error).__name__}: {error}"},
+        # Set by hand: this handler runs outside CORSMiddleware, so without it
+        # the browser drops the response and the caller sees a network failure.
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 _retriever = None
 
@@ -101,10 +150,16 @@ class ChatResponse(BaseModel):
 @app.get("/health")
 def health():
     retriever = get_retriever()
+    embedding_error = getattr(app.state, "embedding_error", None)
+    mismatch = getattr(app.state, "embedding_mismatch", None)
+
     return {
-        "status": "ok",
+        "status": "degraded" if (embedding_error or mismatch) else "ok",
         "embedding": f"{retriever.embedder.provider}/{retriever.embedder.model}",
         "embedding_dimensions": retriever.embedder.dimensions,
+        "embedding_ready": embedding_error is None,
+        "embedding_error": embedding_error,
+        "embedding_mismatch": getattr(app.state, "embedding_mismatch", None),
         "llm_providers": list(LLM_DEFAULTS),
     }
 

@@ -19,7 +19,7 @@ import { LLM_PROVIDERS, type AppSettings, type LlmProvider } from '../types'
 type ConnectionState =
   | { kind: 'idle' }
   | { kind: 'checking' }
-  | { kind: 'ok'; embedding: string }
+  | { kind: 'ok'; embedding: string; warning?: string }
   | { kind: 'error'; message: string }
 
 type SectionId = 'general' | 'account' | 'connection' | 'data'
@@ -98,7 +98,11 @@ export function SettingsPage() {
     setConnection({ kind: 'checking' })
     try {
       const health = await checkHealth(settings.apiBaseUrl)
-      setConnection({ kind: 'ok', embedding: health.embedding })
+      setConnection({
+        kind: 'ok',
+        embedding: health.embedding,
+        warning: health.embedding_error || health.embedding_mismatch || undefined,
+      })
     } catch (error) {
       setConnection({
         kind: 'error',
@@ -272,8 +276,14 @@ export function SettingsPage() {
                     {connection.kind === 'checking' ? 'Checking…' : 'Test connection'}
                   </Button>
                   {connection.kind === 'ok' ? (
-                    <span className="text-xs text-emerald-700">
-                      Connected · embeddings {connection.embedding}
+                    <span
+                      className={`text-xs ${
+                        connection.warning ? 'text-amber-700' : 'text-emerald-700'
+                      }`}
+                    >
+                      {connection.warning
+                        ? `Reachable, but: ${connection.warning}`
+                        : `Connected · embeddings ${connection.embedding}`}
                     </span>
                   ) : null}
                   {connection.kind === 'error' ? (

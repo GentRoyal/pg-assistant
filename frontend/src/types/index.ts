@@ -113,6 +113,9 @@ export type HealthResponse = {
   status: string
   embedding: string
   embedding_dimensions: number
+  embedding_ready?: boolean
+  embedding_error?: string | null
+  embedding_mismatch?: string | null
   llm_providers: string[]
 }
 
