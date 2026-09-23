@@ -100,28 +100,38 @@ export function ChatPage() {
           </NavLink>
         </header>
 
-        <main className="chat-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 md:px-6" aria-live="polite">
-          <DisclaimerBanner />
-
+        <main
+          className={`min-h-0 flex-1 overscroll-contain px-3 md:px-6 ${
+            messages.length === 0
+              ? 'flex flex-col overflow-hidden py-3'
+              : 'chat-scroll overflow-y-auto py-4'
+          }`}
+          aria-live="polite"
+        >
           {messages.length === 0 ? (
-            <EmptyState onPick={(q) => void sendMessage(q)} />
-          ) : (
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-3.5 pb-2">
-              {messages.map((m) => (
-                <MessageBubble key={m.id} message={m} />
-              ))}
-              {isSending ? (
-                <div className="flex items-center gap-2 text-sm text-[var(--ui-muted)]" role="status">
-                  <span className="inline-flex gap-1" aria-hidden>
-                    <span className="size-1.5 animate-pulse rounded-full bg-[var(--ui-navy)]" />
-                    <span className="size-1.5 animate-pulse rounded-full bg-[var(--ui-navy)] [animation-delay:120ms]" />
-                    <span className="size-1.5 animate-pulse rounded-full bg-[var(--ui-navy)] [animation-delay:240ms]" />
-                  </span>
-                  Searching regulations…
-                </div>
-              ) : null}
-              <div ref={bottomRef} />
+            <div className="flex min-h-0 flex-1 flex-col">
+              <EmptyState onPick={(q) => void sendMessage(q)} />
             </div>
+          ) : (
+            <>
+              <DisclaimerBanner />
+              <div className="mx-auto flex w-full max-w-3xl flex-col gap-3.5 pb-2">
+                {messages.map((m) => (
+                  <MessageBubble key={m.id} message={m} />
+                ))}
+                {isSending ? (
+                  <div className="flex items-center gap-2 text-sm text-[var(--ui-muted)]" role="status">
+                    <span className="inline-flex gap-1" aria-hidden>
+                      <span className="size-1.5 animate-pulse rounded-full bg-[var(--ui-navy)]" />
+                      <span className="size-1.5 animate-pulse rounded-full bg-[var(--ui-navy)] [animation-delay:120ms]" />
+                      <span className="size-1.5 animate-pulse rounded-full bg-[var(--ui-navy)] [animation-delay:240ms]" />
+                    </span>
+                    Searching regulations…
+                  </div>
+                ) : null}
+                <div ref={bottomRef} />
+              </div>
+            </>
           )}
         </main>
 
@@ -130,10 +140,14 @@ export function ChatPage() {
           className="shrink-0 border-t border-[var(--ui-line)] bg-white px-3 pt-3 md:px-6"
           style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
         >
-          <ChatInput disabled={isSending} onSend={(q, files) => void sendMessage(q, files)} />
+          <ChatInput
+            disabled={isSending}
+            compact={messages.length === 0}
+            onSend={(q, files) => void sendMessage(q, files)}
+          />
           <p className="mx-auto mt-2 max-w-3xl px-1 text-center text-[11px] leading-snug text-[var(--ui-muted)]">
-            Not an official University of Ibadan ruling. Confirm important matters with your department
-            or Postgraduate College.
+            Study aid only — not an official UI ruling. Confirm with your department or Postgraduate
+            College.
           </p>
         </div>
       </div>

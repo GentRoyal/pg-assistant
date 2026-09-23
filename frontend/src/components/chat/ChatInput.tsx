@@ -9,6 +9,8 @@ import { Button } from '../ui/Button'
 
 type Props = {
   disabled?: boolean
+  /** Hide extra attachment hint line (empty chat — keep first screen scroll-free) */
+  compact?: boolean
   onSend: (value: string, files: File[]) => void
 }
 
@@ -39,7 +41,7 @@ function isAllowedFile(file: File) {
   return okExt || okMime
 }
 
-export function ChatInput({ disabled, onSend }: Props) {
+export function ChatInput({ disabled, compact = false, onSend }: Props) {
   const [value, setValue] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -224,9 +226,11 @@ export function ChatInput({ disabled, onSend }: Props) {
           <SendHorizontal size={18} aria-hidden />
         </Button>
       </div>
-      <p className="px-2 pb-0.5 pt-1 text-[11px] text-[var(--ui-muted)]">
-        Attachments: PDF, Word, TXT, images · max {ATTACHMENT_MAX_FILES} files · 10 MB each
-      </p>
+      {!compact ? (
+        <p className="px-2 pb-0.5 pt-1 text-[11px] text-[var(--ui-muted)]">
+          Attachments: PDF, Word, TXT, images · max {ATTACHMENT_MAX_FILES} files · 10 MB each
+        </p>
+      ) : null}
     </form>
   )
 }
