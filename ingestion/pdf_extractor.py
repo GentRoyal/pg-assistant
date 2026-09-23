@@ -194,6 +194,16 @@ LOWER_START = re.compile(r"^[a-z(]")
 SECTION_NUMBER_ONLY = re.compile(r"^\d{1,2}(?:\.\d{1,2})*\.$|^\d{1,2}(?:\.\d{1,2})+$")
 OPEN_END = re.compile(r"[,;:\-]$|\w$")
 
+OCR_MIN_CHARS = 40
+OCR_MIN_CONFIDENCE = 0.5
+OCR_DPI = 200
+OCR_SIZE_RATIO = 0.8
+RUNON_MIN_LENGTH = 10
+RUNON_CONNECTIVES = {
+    "a", "an", "and", "as", "at", "by", "for", "from", "in", "of", "on",
+    "or", "the", "to", "with",
+}
+
 
 def _line_info(line):
     text = "".join(span["text"] for span in line["spans"])
@@ -233,15 +243,192 @@ def _page_lines(page):
     return result
 
 
-def _profile_document(pdf, start_index, end_index):
-    size_weights = Counter()
-    margin_texts = Counter()
-    page_count = end_index - start_index
+_OCR_ENGINE = None
+
+
+def _ocr_engine():
+    global _OCR_ENGINE
+    if _OCR_ENGINE is None:
+        from rapidocr_onnxruntime import RapidOCR
+
+        _OCR_ENGINE = RapidOCR()
+    return _OCR_ENGINE
+
+
+def page_needs_ocr(page, min_chars=OCR_MIN_CHARS):
+    return len(page.get_text().strip()) < min_chars
+
+
+def _ocr_boxes(page, dpi):
+    import numpy as np
+
+    pixmap = page.get_pixmap(dpi=dpi)
+    image = np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(
+        pixmap.height, pixmap.width, pixmap.n
+    )
+    if pixmap.n == 4:
+        image = image[:, :, :3]
+
+    result, _ = _ocr_engine()(image)
+    if not result:
+        return []
+
+    scale = 72.0 / dpi
+    boxes = []
+    for box, text, score in result:
+        text = normalize_unicode(text).strip()
+        if not text or score < OCR_MIN_CONFIDENCE:
+            continue
+        xs = [point[0] * scale for point in box]
+        ys = [point[1] * scale for point in box]
+        boxes.append(
+            {
+                "text": text,
+                "x0": min(xs),
+                "y0": min(ys),
+                "y1": max(ys),
+                "height": max(ys) - min(ys),
+            }
+        )
+    return sorted(boxes, key=lambda b: (b["y0"], b["x0"]))
+
+
+def _ocr_page_lines(page, dpi=OCR_DPI):
+    boxes = _ocr_boxes(page, dpi)
+    if not boxes:
+        return []
+
+    lines = []
+    for box in boxes:
+        centre = (box["y0"] + box["y1"]) / 2
+        if lines:
+            last = lines[-1]
+            last_centre = (last["y0"] + last["y1"]) / 2
+            if abs(centre - last_centre) < max(last["height"], box["height"]) * 0.6:
+                last["parts"].append(box)
+                last["y0"] = min(last["y0"], box["y0"])
+                last["y1"] = max(last["y1"], box["y1"])
+                last["height"] = max(last["height"], box["height"])
+                continue
+        lines.append({"parts": [box], "y0": box["y0"], "y1": box["y1"], "height": box["height"]})
+
+    merged = []
+    for line in lines:
+        parts = sorted(line["parts"], key=lambda b: b["x0"])
+        merged.append(
+            {
+                "text": " ".join(part["text"] for part in parts),
+                "size": round(line["height"] * OCR_SIZE_RATIO, 1),
+                "bold": False,
+                "x0": parts[0]["x0"],
+                "y0": line["y0"],
+                "y1": line["y1"],
+            }
+        )
+
+    gaps = [
+        merged[index]["y0"] - merged[index - 1]["y1"] for index in range(1, len(merged))
+    ]
+    typical_gap = sorted(gaps)[len(gaps) // 2] if gaps else 0
+
+    blocks = [[merged[0]]]
+    for previous, line in zip(merged, merged[1:]):
+        if line["y0"] - previous["y1"] > max(typical_gap * 2, 4):
+            blocks.append([line])
+        else:
+            blocks[-1].append(line)
+
+    return blocks
+
+
+def _split_runon_caps(page_entries):
+    vocabulary = set()
+    for entry in page_entries:
+        for block_lines in entry["blocks"]:
+            for line in block_lines:
+                for word in re.findall(r"[A-Za-z]{2,}", line["text"]):
+                    if not word.isupper():
+                        vocabulary.add(word.lower())
+    vocabulary.update(RUNON_CONNECTIVES)
+
+    def split(token):
+        lowered = token.lower()
+        pieces = []
+        position = 0
+        while position < len(lowered):
+            for end in range(len(lowered), position, -1):
+                candidate = lowered[position:end]
+                if len(candidate) >= 2 and candidate in vocabulary:
+                    pieces.append(token[position:end])
+                    position = end
+                    break
+            else:
+                return None
+
+        if len(pieces) < 2:
+            return None
+
+        # Only accept a split made of real words; anything shorter than four
+        # letters has to be a connective, otherwise this is guesswork.
+        for piece in pieces:
+            if len(piece) < 4 and piece.lower() not in RUNON_CONNECTIVES:
+                return None
+
+        return " ".join(pieces)
+
+    for entry in page_entries:
+        if not entry["ocr"]:
+            continue
+        for block_lines in entry["blocks"]:
+            for line in block_lines:
+                replaced = []
+                for token in line["text"].split():
+                    if len(token) >= RUNON_MIN_LENGTH and token.isupper() and token.isalpha():
+                        replaced.append(split(token) or token)
+                    else:
+                        replaced.append(token)
+                line["text"] = " ".join(replaced)
+
+
+def _collect_pages(pdf, start_index, end_index, ocr, ocr_dpi, verbose):
+    entries = []
 
     for page_number in range(start_index, end_index):
         page = pdf[page_number]
-        height = page.rect.height
-        for block_lines in _page_lines(page):
+        blocks = _page_lines(page)
+        used_ocr = False
+
+        if ocr == "always" or (ocr == "auto" and page_needs_ocr(page)):
+            if verbose:
+                print(f"  OCR page {page_number + 1}...")
+            ocr_blocks = _ocr_page_lines(page, ocr_dpi)
+            if ocr_blocks:
+                blocks = ocr_blocks
+                used_ocr = True
+
+        entries.append(
+            {
+                "page": page_number + 1,
+                "height": page.rect.height,
+                "blocks": blocks,
+                "ocr": used_ocr,
+            }
+        )
+
+    if any(entry["ocr"] for entry in entries):
+        _split_runon_caps(entries)
+
+    return entries
+
+
+def _profile_document(page_entries):
+    size_weights = Counter()
+    margin_texts = Counter()
+    page_count = len(page_entries)
+
+    for entry in page_entries:
+        height = entry["height"]
+        for block_lines in entry["blocks"]:
             for line in block_lines:
                 text = clean_block_text(line["text"])
                 if not text:
@@ -284,8 +471,9 @@ def _classify(text, line, body_size, heading_sizes):
     return "paragraph", None
 
 
-def _extract_page(page, page_number, body_size, heading_sizes, repeated):
-    height = page.rect.height
+def _extract_page(entry, body_size, heading_sizes, repeated):
+    height = entry["height"]
+    page_number = entry["page"]
     elements = []
     page_label = None
     toc_hits = 0
@@ -308,7 +496,7 @@ def _extract_page(page, page_number, body_size, heading_sizes, repeated):
             )
         current = None
 
-    for block_lines in _page_lines(page):
+    for block_lines in entry["blocks"]:
         for line in block_lines:
             text = clean_block_text(line["text"])
             if not text:
@@ -394,7 +582,9 @@ def _is_toc_page(elements, toc_hits):
     return toc_hits >= 2 and ("table of contents" in head or head.startswith("contents"))
 
 
-def extract_document(pdf_path, start_page=None, end_page=None, verbose=True):
+def extract_document(
+    pdf_path, start_page=None, end_page=None, ocr="auto", ocr_dpi=OCR_DPI, verbose=True
+):
     pdf_path = Path(pdf_path)
     if not pdf_path.exists():
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
@@ -412,30 +602,36 @@ def extract_document(pdf_path, start_page=None, end_page=None, verbose=True):
         if start_index >= end_index:
             raise ValueError("Start page must be less than or equal to end page.")
 
-        body_size, heading_sizes, repeated = _profile_document(pdf, start_index, end_index)
-
         if verbose:
             print(f"PDF: {pdf_path.name}")
             print(f"Pages {start_index + 1}-{end_index} of {total_pages}")
+
+        page_entries = _collect_pages(pdf, start_index, end_index, ocr, ocr_dpi, verbose)
+        ocr_pages = [entry["page"] for entry in page_entries if entry["ocr"]]
+
+        body_size, heading_sizes, repeated = _profile_document(page_entries)
+
+        if verbose:
             print(f"Body font size: {body_size} | heading sizes: {heading_sizes[:4]}")
             print(f"Repeated header/footer lines: {len(repeated)}")
+            if ocr_pages:
+                print(f"OCR applied to {len(ocr_pages)} page(s): {ocr_pages}")
 
         pages = []
         skipped = []
         previous_tail = None
 
-        for page_number in range(start_index, end_index):
-            page = pdf[page_number]
+        for entry in page_entries:
             elements, page_label, toc_hits = _extract_page(
-                page, page_number + 1, body_size, heading_sizes, repeated
+                entry, body_size, heading_sizes, repeated
             )
 
             if not elements:
-                skipped.append((page_number + 1, "no usable text"))
+                skipped.append((entry["page"], "no usable text"))
                 continue
 
             if _is_toc_page(elements, toc_hits):
-                skipped.append((page_number + 1, "table of contents"))
+                skipped.append((entry["page"], "table of contents"))
                 continue
 
             first = elements[0]
@@ -449,9 +645,10 @@ def extract_document(pdf_path, start_page=None, end_page=None, verbose=True):
 
             pages.append(
                 {
-                    "page": page_number + 1,
+                    "page": entry["page"],
                     "page_label": page_label,
                     "blocks": elements,
+                    "ocr": entry["ocr"],
                 }
             )
             previous_tail = elements[-1]
@@ -465,6 +662,7 @@ def extract_document(pdf_path, start_page=None, end_page=None, verbose=True):
             "title": title,
             "total_pages": total_pages,
             "page_range": [start_index + 1, end_index],
+            "ocr_pages": ocr_pages,
             "pages": pages,
         }
 
@@ -487,12 +685,16 @@ def main():
     parser.add_argument("pdf_path", type=Path)
     parser.add_argument("--start-page", type=int, default=None)
     parser.add_argument("--end-page", type=int, default=None)
+    parser.add_argument("--ocr", choices=("auto", "always", "never"), default="auto")
+    parser.add_argument("--ocr-dpi", type=int, default=OCR_DPI)
     parser.add_argument(
         "--output", type=Path, default=Path("data/results/extracted.json")
     )
     args = parser.parse_args()
 
-    document = extract_document(args.pdf_path, args.start_page, args.end_page)
+    document = extract_document(
+        args.pdf_path, args.start_page, args.end_page, ocr=args.ocr, ocr_dpi=args.ocr_dpi
+    )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with open(args.output, "w", encoding="utf-8") as handle:

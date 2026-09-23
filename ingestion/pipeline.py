@@ -11,7 +11,7 @@ try:
         Embedder,
         chunk_document,
     )
-    from ingestion.pdf_extractor import extract_document
+    from ingestion.pdf_extractor import OCR_DPI, extract_document
 except ImportError:
     from chunk_embedder import (
         DEFAULT_MAX_TOKENS,
@@ -20,7 +20,7 @@ except ImportError:
         Embedder,
         chunk_document,
     )
-    from pdf_extractor import extract_document
+    from pdf_extractor import OCR_DPI, extract_document
 
 INSERT_BATCH_SIZE = 100
 EMBEDDING_PRECISION = 6
@@ -179,6 +179,8 @@ def ingest_pdf(
     max_tokens=DEFAULT_MAX_TOKENS,
     min_tokens=DEFAULT_MIN_TOKENS,
     overlap_tokens=DEFAULT_OVERLAP_TOKENS,
+    ocr="auto",
+    ocr_dpi=OCR_DPI,
     save_intermediate=True,
     dry_run=False,
     embed=True,
@@ -189,7 +191,7 @@ def ingest_pdf(
     pdf_path = Path(pdf_path)
 
     print(f"\n=== {pdf_path.name} ===")
-    document = extract_document(pdf_path, start_page, end_page)
+    document = extract_document(pdf_path, start_page, end_page, ocr=ocr, ocr_dpi=ocr_dpi)
     chunks = chunk_document(document, max_tokens, min_tokens, overlap_tokens)
 
     sizes = [chunk["token_count"] for chunk in chunks]
