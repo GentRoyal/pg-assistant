@@ -126,7 +126,7 @@ export function ChatPage() {
                       <span className="size-1.5 animate-pulse rounded-full bg-[var(--ui-navy)] [animation-delay:120ms]" />
                       <span className="size-1.5 animate-pulse rounded-full bg-[var(--ui-navy)] [animation-delay:240ms]" />
                     </span>
-                    Searching regulations…
+                    Thinking…
                   </div>
                 ) : null}
                 <div ref={bottomRef} />

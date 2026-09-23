@@ -14,6 +14,7 @@ import {
   saveConversations,
 } from '../lib/storage'
 import type { ChatMessage, Conversation, MessageAttachment, SourceChunk } from '../types'
+import { useAuth } from './AuthContext'
 import { useSettings } from './SettingsContext'
 
 function uid() {
@@ -70,6 +71,7 @@ type ChatContextValue = {
 const ChatContext = createContext<ChatContextValue | null>(null)
 
 export function ChatProvider({ children }: { children: ReactNode }) {
+  const { token } = useAuth()
   const { settings } = useSettings()
   const [conversations, setConversations] = useState<Conversation[]>(() => loadConversations())
   const [activeId, setActiveId] = useState<string | null>(() => loadActiveId())
@@ -187,6 +189,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           {
             apiBaseUrl: settings.apiBaseUrl,
             useMock: settings.useMockApi,
+            token: token ?? undefined,
           },
         )
 
@@ -245,6 +248,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       settings.useMockApi,
       settings.llmProvider,
       settings.llmModel,
+      token,
     ],
   )
 

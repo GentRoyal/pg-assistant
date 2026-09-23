@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { BookOpen, ChevronDown, ChevronUp, FileText, Image as ImageIcon } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { ChatMessage } from '../../types'
 import { useSettings } from '../../context/SettingsContext'
 
@@ -20,29 +20,12 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function usePreferCollapsedSources() {
-  const [collapsed, setCollapsed] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 639px)')
-    const sync = () => setCollapsed(mq.matches)
-    sync()
-    mq.addEventListener('change', sync)
-    return () => mq.removeEventListener('change', sync)
-  }, [])
-  return collapsed
-}
-
 export function MessageBubble({ message }: { message: ChatMessage }) {
   const { settings } = useSettings()
-  const preferCollapsed = usePreferCollapsedSources()
-  const [openSources, setOpenSources] = useState(!preferCollapsed)
+  const [openSources, setOpenSources] = useState(false)
   const isUser = message.role === 'user'
   const hasSources = Boolean(message.sources?.length)
   const hasAttachments = Boolean(message.attachments?.length)
-
-  useEffect(() => {
-    setOpenSources(!preferCollapsed)
-  }, [preferCollapsed, message.id])
 
   return (
     <motion.article

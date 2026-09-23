@@ -4,7 +4,8 @@ React (Vite + TypeScript + Tailwind) chat UI for the University of Ibadan postgr
 
 ## Features
 
-- Open chat (no login)
+- Demo auth layer (fake login; ready for real `POST /auth/login`)
+- Open chat after sign-in
 - ChatGPT-style history sidebar + settings
 - File attachments (PDF, Word, TXT, images) with drag-and-drop
 - Answers with **sources**, **chunk text**, and **confidence**
@@ -22,6 +23,8 @@ npm run dev
 ```
 
 Open http://localhost:5173
+
+Demo login: `student@ui.edu.ng` / `demo1234`
 
 ## Backend contract
 
@@ -78,6 +81,14 @@ Other endpoints:
 - `GET /health` — used by **Test connection** in Settings
 - `POST /retrieve` — search only, no LLM needed
 - `GET`/`DELETE /conversations/{id}` — server-side history
+
+### Auth
+
+The sign-in layer is a **local demo**, not real authentication. `lib/auth.ts`
+tries `POST /auth/login` first and falls back to demo credentials when the
+backend does not implement it — which it currently does not. Chat requests send
+`Authorization: Bearer <token>` when a session exists; the API ignores it today.
+Nothing here is a security boundary.
 
 ### Attachments
 

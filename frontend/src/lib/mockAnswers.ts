@@ -84,7 +84,7 @@ export async function mockAsk(question: string, files: File[] = []): Promise<Ask
 
   const attachmentNote =
     files.length > 0
-      ? `\n\n📎 Noted attachment${files.length > 1 ? 's' : ''}: ${files.map((f) => `“${f.name}”`).join(', ')}. In demo mode I acknowledge uploads; your teammate’s API can process them via multipart \`files\` on \`POST /ask\`.`
+      ? `\n\n📎 Noted attachment${files.length > 1 ? 's' : ''}: ${files.map((f) => `“${f.name}”`).join(', ')}. In demo mode I acknowledge uploads. The real backend answers from documents ingested into Supabase, so it does not accept attachments.`
       : ''
 
   if (!hit) return fallback(question, files)

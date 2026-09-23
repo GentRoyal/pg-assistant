@@ -84,7 +84,7 @@ export function toAskResponse(data: ChatApiResponse): AskResponse {
 
 export async function askQuestion(
   payload: AskRequest,
-  options: { apiBaseUrl?: string; useMock?: boolean },
+  options: { apiBaseUrl?: string; useMock?: boolean; token?: string },
 ): Promise<AskResponse> {
   const files = payload.files ?? []
 
@@ -101,6 +101,8 @@ export async function askQuestion(
   }
 
   const base = resolveApiBase(options.apiBaseUrl)
+  const headers: Record<string, string> = {}
+  if (options.token) headers.Authorization = `Bearer ${options.token}`
 
   const body: Record<string, unknown> = { question: payload.question }
   if (payload.conversation_id) body.conversation_id = payload.conversation_id
@@ -113,7 +115,7 @@ export async function askQuestion(
   try {
     res = await fetch(`${base}/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
   } catch {

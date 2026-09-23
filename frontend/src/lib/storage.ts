@@ -1,11 +1,26 @@
-import type { AppSettings, Conversation } from '../types'
+import type { AppSettings, AuthSession, Conversation } from '../types'
 
 const KEYS = {
   conversations: 'ui-ara.conversations',
   settings: 'ui-ara.settings',
   activeId: 'ui-ara.activeConversationId',
   sidebarOpen: 'ui-ara.sidebarOpenDesktop',
+  auth: 'ui-ara.authSession',
 } as const
+
+export function loadAuthSession(): AuthSession | null {
+  try {
+    const raw = localStorage.getItem(KEYS.auth)
+    return raw ? (JSON.parse(raw) as AuthSession) : null
+  } catch {
+    return null
+  }
+}
+
+export function saveAuthSession(session: AuthSession | null) {
+  if (!session) localStorage.removeItem(KEYS.auth)
+  else localStorage.setItem(KEYS.auth, JSON.stringify(session))
+}
 
 export function loadDesktopSidebarOpen(): boolean {
   const raw = localStorage.getItem(KEYS.sidebarOpen)
