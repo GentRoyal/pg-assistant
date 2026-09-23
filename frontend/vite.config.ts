@@ -12,12 +12,15 @@ export default defineConfig(({ mode }) => {
       host: true,
       port: 5173,
 
+      allowedHosts: [
+        'pg-assistant.onrender.com',
+      ],
+
       proxy: {
         '/api': {
-          target: env.API_TARGET || 'http://localhost:8000',
+          target: env.VITE_API_TARGET || 'http://localhost:8000',
           changeOrigin: true,
           secure: true,
-
           rewrite: (path) => path.replace(/^\/api/, ''),
         },
       },
