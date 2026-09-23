@@ -1,4 +1,4 @@
-import { MessageSquarePlus, PanelLeftClose, Settings, Trash2 } from 'lucide-react'
+import { MessageSquarePlus, Settings, Trash2 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { useChat } from '../../context/ChatContext'
 import { Button } from '../ui/Button'
@@ -6,10 +6,9 @@ import { Button } from '../ui/Button'
 type Props = {
   open: boolean
   onClose: () => void
-  onToggleDesktop?: () => void
 }
 
-export function Sidebar({ open, onClose, onToggleDesktop }: Props) {
+export function Sidebar({ open, onClose }: Props) {
   const {
     conversations,
     activeConversation,
@@ -59,17 +58,6 @@ export function Sidebar({ open, onClose, onToggleDesktop }: Props) {
               <p className="truncate text-sm font-semibold tracking-tight">PG Assistant</p>
               <p className="truncate text-[11px] font-medium text-[var(--ui-gold)]">University of Ibadan</p>
             </div>
-            {onToggleDesktop ? (
-              <Button
-                variant="ghost"
-                className="!hidden !min-h-10 !min-w-10 !px-0 !text-white hover:!bg-white/10 lg:!inline-flex"
-                onClick={onToggleDesktop}
-                aria-label="Collapse sidebar"
-                title="Collapse sidebar"
-              >
-                <PanelLeftClose size={18} />
-              </Button>
-            ) : null}
           </div>
 
           <div className="p-3">

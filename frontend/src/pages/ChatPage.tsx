@@ -67,11 +67,7 @@ export function ChatPage() {
 
   return (
     <div className="flex h-dvh max-h-dvh overflow-hidden bg-[var(--ui-canvas)]">
-      <Sidebar
-        open={sidebarOpen}
-        onClose={() => setOpen(false)}
-        onToggleDesktop={() => setOpen(false)}
-      />
+      <Sidebar open={sidebarOpen} onClose={() => setOpen(false)} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header
