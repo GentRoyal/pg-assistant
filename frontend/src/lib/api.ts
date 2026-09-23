@@ -29,7 +29,8 @@ export async function askQuestion(
   }
 
   const base = resolveApiBase(options.apiBaseUrl)
-  const authHeaders = options.token ? { Authorization: `Bearer ${options.token}` } : {}
+  const headers: Record<string, string> = {}
+  if (options.token) headers.Authorization = `Bearer ${options.token}`
 
   let res: Response
   if (files.length > 0) {
@@ -40,13 +41,13 @@ export async function askQuestion(
 
     res = await fetch(`${base}/ask`, {
       method: 'POST',
-      headers: { ...authHeaders },
+      headers,
       body: form,
     })
   } else {
     res = await fetch(`${base}/ask`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         question: payload.question,
         conversation_id: payload.conversation_id,

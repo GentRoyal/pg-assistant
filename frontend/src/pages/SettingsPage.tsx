@@ -1,14 +1,17 @@
 import { ArrowLeft } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
+import { useAuth } from '../context/AuthContext'
 import { useChat } from '../context/ChatContext'
 import { useSettings } from '../context/SettingsContext'
 import { Modal } from '../components/ui/Modal'
 import { useState } from 'react'
 import { UiLogo } from '../components/brand/UiLogo'
+import { DEMO_AUTH } from '../lib/auth'
 
 export function SettingsPage() {
   const { settings, updateSettings, resetSettings } = useSettings()
+  const { user, logout } = useAuth()
   const { clearAll } = useChat()
   const [confirmClear, setConfirmClear] = useState(false)
 
@@ -37,7 +40,22 @@ export function SettingsPage() {
           </div>
         </div>
 
-        <section className="mt-8 space-y-4 rounded-2xl border border-[var(--ui-line)] bg-white p-5 shadow-sm">
+        <section className="mt-8 space-y-3 rounded-2xl border border-[var(--ui-line)] bg-white p-5 shadow-sm">
+          <h2 className="text-base font-semibold text-[var(--ui-navy)]">Account (demo auth)</h2>
+          <p className="text-sm text-[var(--ui-ink)]">
+            {user?.name} · {user?.email}
+          </p>
+          <p className="text-xs text-[var(--ui-muted)]">
+            Fake auth is active for demos. When backend ships{' '}
+            <code className="rounded bg-[var(--ui-soft)] px-1">POST /auth/login</code>, the UI will
+            prefer that response. Demo pair: {DEMO_AUTH.email} / {DEMO_AUTH.password}
+          </p>
+          <Button variant="secondary" onClick={logout}>
+            Sign out
+          </Button>
+        </section>
+
+        <section className="mt-4 space-y-4 rounded-2xl border border-[var(--ui-line)] bg-white p-5 shadow-sm">
           <h2 className="text-base font-semibold text-[var(--ui-navy)]">Answer extras</h2>
           {(
             [

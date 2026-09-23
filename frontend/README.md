@@ -4,7 +4,8 @@ React (Vite + TypeScript + Tailwind) chat UI for the University of Ibadan postgr
 
 ## Features
 
-- Open chat (no login)
+- Demo auth layer (fake login; ready for real `POST /auth/login`)
+- Open chat after sign-in
 - ChatGPT-style history sidebar + settings
 - File attachments (PDF, Word, TXT, images) with drag-and-drop
 - Answers with **sources**, **chunk text**, and **confidence**
@@ -22,6 +23,8 @@ npm run dev
 ```
 
 Open http://localhost:5173
+
+Demo login: `student@ui.edu.ng` / `demo1234`
 
 ## Backend contract (for your teammate)
 
@@ -56,6 +59,10 @@ With attachments, the same endpoint accepts **multipart/form-data**:
 - `question` (string)
 - `conversation_id` (optional)
 - `files` (one or more files)
+
+Auth (optional now, demo layer already wires the header):
+- `POST /auth/login` `{ email, password }` → `{ token, user }`
+- Ask requests send `Authorization: Bearer <token>` when a session exists
 
 Set `VITE_USE_MOCK_API=false` and `VITE_API_BASE_URL=http://localhost:8000` when the API is live.
 
