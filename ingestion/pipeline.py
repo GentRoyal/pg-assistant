@@ -63,17 +63,15 @@ def _upsert_document(client, document, content_hash, embedder, attributes=None):
     return response.data[0]["id"]
 
 
-def _existing_hash(client, source):
+def _existing_document(client, source):
     response = (
         client.table(DOCUMENTS_TABLE)
-        .select("id, content_hash")
+        .select("id, content_hash, title")
         .eq("source", source)
         .limit(1)
         .execute()
     )
-    if response.data:
-        return response.data[0]["content_hash"]
-    return None
+    return response.data[0] if response.data else {}
 
 
 def _insert_chunks(client, document_id, chunks):
@@ -185,27 +183,38 @@ def ingest_pdf(
     force=False,
     attributes=None,
     embedder=None,
+    title=None,
 ):
     pdf_path = Path(pdf_path)
 
     print(f"\n=== {pdf_path.name} ===")
+
+    client = None
+    existing = {}
+    content_hash = file_hash(pdf_path)
+
+    if not dry_run:
+        client = _get_client()
+        _verify_schema(client)
+        existing = _existing_document(client, pdf_path.name)
+        if not force and existing.get("content_hash") == content_hash:
+            print("Unchanged since last ingest (same content hash). Use --force to re-ingest.")
+            return {"document": None, "chunks": [], "inserted": 0}
+
     document = extract_document(pdf_path, start_page, end_page, ocr=ocr, ocr_dpi=ocr_dpi)
+
+    # PDF metadata titles are often design-file names ("Handbook.cdr"). A title
+    # given here or already corrected in Supabase wins, and it has to be set
+    # before chunking because every chunk's breadcrumb starts with it.
+    document["title"] = title or existing.get("title") or document["title"]
+    print(f"Title: {document['title']}")
+
     chunks = chunk_document(document, max_tokens, min_tokens, overlap_tokens)
 
     sizes = [chunk["token_count"] for chunk in chunks]
     print(f"Chunks: {len(chunks)}")
     if sizes:
         print(f"Tokens min/avg/max: {min(sizes)}/{sum(sizes) // len(sizes)}/{max(sizes)}")
-
-    client = None
-    content_hash = file_hash(pdf_path)
-
-    if not dry_run:
-        client = _get_client()
-        _verify_schema(client)
-        if not force and _existing_hash(client, document["source"]) == content_hash:
-            print("Unchanged since last ingest (same content hash). Use --force to re-ingest.")
-            return {"document": document, "chunks": chunks, "inserted": 0}
 
     if embed:
         embedder = embed_chunks(chunks, embedder)

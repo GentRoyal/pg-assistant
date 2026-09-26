@@ -40,6 +40,11 @@ def main():
         help="OCR scanned pages (auto: only pages with no text layer)",
     )
     parser.add_argument("--ocr-dpi", type=int, default=OCR_DPI)
+    parser.add_argument(
+        "--title",
+        default=None,
+        help="Display title for a single PDF (default: the stored title, else the PDF's metadata)",
+    )
 
     for attribute in DOCUMENT_ATTRIBUTES:
         parser.add_argument(f"--{attribute.replace('_', '-')}", default=None)
@@ -60,10 +65,18 @@ def main():
     }
 
     if args.path.is_dir():
+        if args.title:
+            parser.error("--title applies to a single PDF, not a directory")
         results = ingest_directory(args.path, **options)
     else:
         results = [
-            ingest_pdf(args.path, start_page=args.start_page, end_page=args.end_page, **options)
+            ingest_pdf(
+                args.path,
+                start_page=args.start_page,
+                end_page=args.end_page,
+                title=args.title,
+                **options,
+            )
         ]
 
     total = sum(result["inserted"] for result in results)
