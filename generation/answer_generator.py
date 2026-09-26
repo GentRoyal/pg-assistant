@@ -11,6 +11,7 @@ from generation.prompts import (
     ANSWER_TEMPLATE,
     CONDENSE_TEMPLATE,
     NO_CONTEXT_REPLY,
+    NO_EXCERPTS,
     SUMMARY_TEMPLATE,
     SYSTEM_PROMPT,
 )
@@ -307,26 +308,20 @@ class AnswerGenerator:
 
         results = self.retriever.search(search_query, **search_kwargs)
 
-        if not results:
-            answer_text = NO_CONTEXT_REPLY
-        else:
-            context = format_context(results, max_chars=CONTEXT_CHAR_BUDGET)
-            messages = []
-            if summary:
-                messages.append(
-                    {"role": "user", "content": f"Earlier in this conversation: {summary}"}
-                )
-                messages.append({"role": "assistant", "content": "Understood."})
-            messages.extend(
-                {"role": message["role"], "content": message["content"]} for message in history
-            )
-            messages.append(
-                {
-                    "role": "user",
-                    "content": ANSWER_TEMPLATE.format(context=context, question=question),
-                }
-            )
-            answer_text = self.llm.complete(SYSTEM_PROMPT, messages)
+        # With no excerpts the model still answers, so greetings and out-of-scope
+        # questions get a proper reply; the prompt stops it answering from memory.
+        context = format_context(results, max_chars=CONTEXT_CHAR_BUDGET) if results else NO_EXCERPTS
+        messages = []
+        if summary:
+            messages.append({"role": "user", "content": f"Earlier in this conversation: {summary}"})
+            messages.append({"role": "assistant", "content": "Understood."})
+        messages.extend(
+            {"role": message["role"], "content": message["content"]} for message in history
+        )
+        messages.append(
+            {"role": "user", "content": ANSWER_TEMPLATE.format(context=context, question=question)}
+        )
+        answer_text = self.llm.complete(SYSTEM_PROMPT, messages) or NO_CONTEXT_REPLY
 
         # Only the excerpts the answer relies on are shown as sources; query_logs
         # below still records everything retrieved.

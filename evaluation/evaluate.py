@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from evaluation.test_queries import TEST_QUERIES
 from generation.answer_generator import LLMClient
-from generation.prompts import ANSWER_TEMPLATE, NO_CONTEXT_REPLY, SYSTEM_PROMPT
+from generation.prompts import ANSWER_TEMPLATE, NO_CONTEXT_REPLY, NO_EXCERPTS, SYSTEM_PROMPT
 from retrieval.retriever import DEFAULT_MATCH_COUNT, Retriever, format_context
 
 CONTEXT_CHAR_BUDGET = 12000
@@ -16,7 +16,7 @@ CONTEXT_CHAR_BUDGET = 12000
 # Phrases the assistant uses when the excerpts do not answer the question.
 REFUSAL = re.compile(
     r"could not find|do(es)? not (contain|include|provide|specify|mention|state)|"
-    r"no information|not (available|covered|mentioned) in",
+    r"no information|not (available|covered|mentioned) in|only (help|assist) with|outside (of )?(what|the scope)",
     re.IGNORECASE,
 )
 
@@ -41,11 +41,9 @@ def _answer(llm, question, results):
     Generate the way AnswerGenerator does for a first message, without writing
     a conversation or query log to Supabase.
     """
-    if not results:
-        return NO_CONTEXT_REPLY
-    context = format_context(results, max_chars=CONTEXT_CHAR_BUDGET)
+    context = format_context(results, max_chars=CONTEXT_CHAR_BUDGET) if results else NO_EXCERPTS
     prompt = ANSWER_TEMPLATE.format(context=context, question=question)
-    return llm.complete(SYSTEM_PROMPT, [{"role": "user", "content": prompt}])
+    return llm.complete(SYSTEM_PROMPT, [{"role": "user", "content": prompt}]) or NO_CONTEXT_REPLY
 
 
 def _check_answer(answer, case):
