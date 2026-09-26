@@ -79,6 +79,89 @@ textarea#chat-input:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.markdown-answer {
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.markdown-answer > * + * {
+  margin-top: 0.6em;
+}
+
+.markdown-answer strong {
+  font-weight: 700;
+}
+
+.markdown-answer h1,
+.markdown-answer h2,
+.markdown-answer h3,
+.markdown-answer h4 {
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.markdown-answer h1,
+.markdown-answer h2 {
+  font-size: 1.05em;
+}
+
+.markdown-answer h3,
+.markdown-answer h4 {
+  font-size: 1em;
+}
+
+.markdown-answer ul,
+.markdown-answer ol {
+  padding-left: 1.4em;
+}
+
+.markdown-answer ul {
+  list-style: disc;
+}
+
+.markdown-answer ol {
+  list-style: decimal;
+}
+
+.markdown-answer li + li,
+.markdown-answer li > ul,
+.markdown-answer li > ol {
+  margin-top: 0.25em;
+}
+
+.markdown-answer code {
+  border-radius: 0.3em;
+  background: var(--ui-soft);
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+}
+
+.markdown-answer table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.markdown-answer th,
+.markdown-answer td {
+  border: 1px solid var(--ui-line);
+  padding: 0.35em 0.6em;
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-answer th {
+  background: var(--ui-soft);
+  font-weight: 600;
+}
+
+.markdown-answer a {
+  color: var(--ui-navy);
+  text-decoration: underline;
+}
+
 .chat-scroll {
   scrollbar-width: thin;
   scrollbar-color: #c5cad3 transparent;

@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion'
 import { BookOpen, ChevronDown, ChevronUp, FileText, Image as ImageIcon } from 'lucide-react'
 import { useState } from 'react'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { ChatMessage } from '../../types'
 import { useSettings } from '../../context/SettingsContext'
 
@@ -75,7 +77,15 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
         ) : null}
 
         {message.content ? (
-          <div className="prose-answer break-words text-[0.95rem]">{message.content}</div>
+          isUser || message.isError ? (
+            <div className="prose-answer break-words text-[0.95rem]">{message.content}</div>
+          ) : (
+            // Answers are markdown; react-markdown ignores raw HTML, so nothing from
+            // the model is injected into the page.
+            <div className="markdown-answer break-words text-[0.95rem]">
+              <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
+            </div>
+          )
         ) : null}
 
         {!isUser && !message.isError && settings.showConfidence && typeof message.confidence === 'number' ? (
@@ -129,7 +139,7 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
         ) : null}
 
         {!isUser && settings.showSources && !hasSources && !message.isError ? (
-          <p className="mt-3 text-xs text-[var(--ui-muted)]">No supporting regulation chunks were returned.</p>
+          <p className="mt-3 text-xs text-[var(--ui-muted)]">Sources: none</p>
         ) : null}
       </div>
     </motion.article>

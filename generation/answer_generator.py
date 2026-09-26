@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -28,6 +29,8 @@ RECENT_TURNS = 6
 HISTORY_CHAR_BUDGET = 6000
 CONTEXT_CHAR_BUDGET = 12000
 CITATION_CHAR_LIMIT = 1200
+# [3], [2][5] and [1, 4]; each bracket is renumbered on its own.
+CITATION = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 
 CONVERSATIONS_TABLE = "conversations"
 MESSAGES_TABLE = "conversation_messages"
@@ -196,6 +199,30 @@ class ConversationStore:
         self.client.table(CONVERSATIONS_TABLE).delete().eq("id", conversation_id).execute()
 
 
+def keep_cited(answer, count):
+    """
+    Renumber the excerpts an answer cites as [1], [2], ... in order of first use,
+    so the answer and its source list agree. Returns the rewritten answer and the
+    original 1-based positions of the cited excerpts; an answer that cites
+    nothing has no sources.
+    """
+    used = []
+
+    def renumber(match):
+        numbers = []
+        for part in match.group(1).split(","):
+            position = int(part)
+            if not 1 <= position <= count:
+                continue
+            if position not in used:
+                used.append(position)
+            numbers.append(str(used.index(position) + 1))
+        return "[" + ", ".join(numbers) + "]" if numbers else ""
+
+    answer = CITATION.sub(renumber, answer)
+    return answer, used
+
+
 def render_history(messages):
     return "\n".join(
         f"{'Student' if message['role'] == 'user' else 'Assistant'}: {message['content']}"
@@ -301,6 +328,9 @@ class AnswerGenerator:
             )
             answer_text = self.llm.complete(SYSTEM_PROMPT, messages)
 
+        # Only the excerpts the answer relies on are shown as sources; query_logs
+        # below still records everything retrieved.
+        answer_text, used = keep_cited(answer_text, len(results))
         citations = [
             {
                 "index": position,
@@ -313,7 +343,7 @@ class AnswerGenerator:
                 "similarity": result.get("similarity"),
                 "content": (result.get("content") or "")[:CITATION_CHAR_LIMIT],
             }
-            for position, result in enumerate(results, start=1)
+            for position, result in enumerate((results[old - 1] for old in used), start=1)
         ]
 
         self.store.add_message(conversation_id, "user", question)
