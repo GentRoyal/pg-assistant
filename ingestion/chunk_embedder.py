@@ -45,6 +45,30 @@ def render_block(block):
     return text
 
 
+def _split_table(block, max_tokens):
+    """Split a table between rows, repeating its header rows in every piece."""
+    lines = block["rendered"].split("\n")
+    head = lines[:2] if block.get("header") else []
+    head_tokens = count_tokens("\n".join(head))
+
+    pieces = []
+    rows = []
+    rows_tokens = 0
+    for line in lines[len(head) :]:
+        tokens = count_tokens(line)
+        if rows and head_tokens + rows_tokens + tokens > max_tokens:
+            pieces.append("\n".join(head + rows))
+            rows = []
+            rows_tokens = 0
+        rows.append(line)
+        rows_tokens += tokens
+
+    if rows:
+        pieces.append("\n".join(head + rows))
+
+    return [dict(block, rendered=piece) for piece in pieces]
+
+
 def flatten_blocks(document):
     flat = []
     stack = []
@@ -65,6 +89,7 @@ def flatten_blocks(document):
                     "page": block["page"],
                     "page_label": page.get("page_label"),
                     "continues_previous_page": block.get("continues_previous_page", False),
+                    "header": block.get("header", False),
                     "section_path": [item["text"] for item in stack],
                 }
             )
@@ -178,7 +203,10 @@ def chunk_document(
     expanded = []
     for block in flat:
         if count_tokens(block["rendered"]) > budget:
-            expanded.extend(_split_oversized(block, budget, overlap_tokens))
+            if block["type"] == "table":
+                expanded.extend(_split_table(block, budget))
+            else:
+                expanded.extend(_split_oversized(block, budget, overlap_tokens))
         else:
             expanded.append(block)
 
@@ -186,19 +214,24 @@ def chunk_document(
     buffer = []
     buffer_tokens = 0
     previous_chunk = None
+    previous_ended_in_table = False
 
     def close():
-        nonlocal buffer, buffer_tokens, previous_chunk
+        nonlocal buffer, buffer_tokens, previous_chunk, previous_ended_in_table
         if not buffer:
             return
         overlap_text = ""
-        if previous_chunk is not None and overlap_tokens > 0:
+        # No overlap next to a table: the tail of a table is half a row, and a
+        # sentence fragment in front of a row would read as a cell.
+        touches_table = previous_ended_in_table or buffer[0]["type"] == "table"
+        if previous_chunk is not None and overlap_tokens > 0 and not touches_table:
             same_section = previous_chunk["section_path"][:1] == buffer[0]["section_path"][:1]
             if same_section or buffer[0]["continues_previous_page"]:
                 overlap_text = _tail_text(previous_chunk["text"], overlap_tokens)
         chunk = _build_chunk(document, buffer, len(chunks), overlap_text)
         chunks.append(chunk)
         previous_chunk = chunk
+        previous_ended_in_table = buffer[-1]["type"] == "table"
         buffer = []
         buffer_tokens = 0
 

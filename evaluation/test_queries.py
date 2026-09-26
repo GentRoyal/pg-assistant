@@ -115,7 +115,38 @@ TEST_QUERIES = [
         "question": "What is the penalty for driving against traffic flow on campus?",
         "sources": [STUDENT_HANDBOOK],
         "pages": [70],
-        "expect": [],
+        "expect": [r"5,?000"],
+    },
+    # Answers that sit in table cells
+    {
+        "question": "What is the fine for overloading passengers in a vehicle on campus?",
+        "sources": [STUDENT_HANDBOOK],
+        "pages": [70],
+        "expect": [r"2,?500"],
+    },
+    {
+        "question": "What is the penalty for damaging University property like road signs?",
+        "sources": [STUDENT_HANDBOOK],
+        "pages": [70],
+        "expect": [r"10,?000"],
+    },
+    {
+        "question": "What is the penalty for reckless driving on campus?",
+        "sources": [STUDENT_HANDBOOK],
+        "pages": [63],
+        "expect": [r"Disciplinary|Intra.?Campus"],
+    },
+    {
+        "question": "How many units is CSC 103?",
+        "sources": [CS_HANDBOOK],
+        "pages": [19, 23, 26],
+        "expect": [r"\b4\b"],
+    },
+    {
+        "question": "Who was Head of the Computer Science Department from 1974 to 1988?",
+        "sources": [CS_HANDBOOK],
+        "pages": [5],
+        "expect": [r"Longe"],
     },
     {
         # The President of Nigeria is the University's Visitor, listed in the handbook.

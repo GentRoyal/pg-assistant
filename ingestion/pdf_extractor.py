@@ -7,6 +7,11 @@ from pathlib import Path
 
 import fitz
 
+try:
+    from ingestion.table_extractor import image_grids, inside, ocr_tables, render_table, text_tables
+except ImportError:
+    from table_extractor import image_grids, inside, ocr_tables, render_table, text_tables
+
 LIGATURES = {
     "ﬀ": "ff",
     "ﬁ": "fi",
@@ -226,12 +231,14 @@ def _line_info(line):
         "size": size,
         "bold": bold,
         "x0": line["bbox"][0],
+        "x1": line["bbox"][2],
         "y0": line["bbox"][1],
         "y1": line["bbox"][3],
     }
 
 
 def _page_lines(page):
+    tables = text_tables(page)
     blocks = page.get_text("dict")["blocks"]
     result = []
     for block in sorted(blocks, key=lambda b: (round(b["bbox"][1], 1), b["bbox"][0])):
@@ -240,11 +247,15 @@ def _page_lines(page):
         lines = []
         for line in block.get("lines", []):
             info = _line_info(line)
-            if info:
+            if info and not any(inside(info, table) for table in tables):
                 lines.append(info)
         if lines:
             result.append(lines)
-    return result
+
+    if not tables:
+        return result
+    result.extend([table] for table in tables)
+    return sorted(result, key=lambda lines: (round(lines[0]["y0"], 1), lines[0]["x0"]))
 
 
 _OCR_ENGINE = None
@@ -273,16 +284,17 @@ def page_needs_ocr(page, min_chars=OCR_MIN_CHARS):
     return len("".join(page.get_text().split())) < min_chars
 
 
-def _ocr_boxes(page, dpi):
+def _page_image(page, dpi):
     import numpy as np
 
     pixmap = page.get_pixmap(dpi=dpi)
     image = np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(
         pixmap.height, pixmap.width, pixmap.n
     )
-    if pixmap.n == 4:
-        image = image[:, :, :3]
+    return np.ascontiguousarray(image[:, :, :3])
 
+
+def _ocr_boxes(image, dpi):
     result = _ocr_engine()(image)
     if result.boxes is None or not result.txts:
         return []
@@ -349,15 +361,26 @@ def _reading_order(boxes, width):
     Split the page into groups read one after another. On a two-column page a
     box spanning the gutter (a title) closes the band above it, and each band
     is read left column first, so lines from the two columns are never joined.
+    A table is always a group of its own.
     """
-    gutter = _find_gutter(boxes, width)
+    gutter = _find_gutter([box for box in boxes if not box.get("table")], width)
     if gutter is None:
-        return [boxes]
+        groups = []
+        current = []
+        for box in boxes:
+            if box.get("table"):
+                groups.extend([current] if current else [])
+                groups.append([box])
+                current = []
+            else:
+                current.append(box)
+        groups.extend([current] if current else [])
+        return groups
 
     groups = []
     left, right = [], []
     for box in boxes:
-        side = _side(box, gutter)
+        side = 0 if box.get("table") else _side(box, gutter)
         if side == 0:
             groups.extend(group for group in (left, right) if group)
             groups.append([box])
@@ -402,11 +425,20 @@ def _group_lines(boxes):
 
 
 def _ocr_page_lines(page, dpi=OCR_DPI):
-    boxes = _ocr_boxes(page, dpi)
+    image = _page_image(page, dpi)
+    boxes = _ocr_boxes(image, dpi)
     if not boxes:
         return []
 
-    groups = [_group_lines(group) for group in _reading_order(boxes, page.rect.width)]
+    # Boxes inside a ruled table become cells of one table line, so a row's
+    # cells stay together instead of being read as separate columns of text.
+    tables, boxes = ocr_tables(image_grids(image), boxes, 72.0 / dpi)
+    boxes = sorted(boxes + tables, key=lambda b: (b["y0"], b["x0"]))
+
+    groups = [
+        group if group[0].get("table") else _group_lines(group)
+        for group in _reading_order(boxes, page.rect.width)
+    ]
 
     gaps = [
         group[index]["y0"] - group[index - 1]["y1"]
@@ -584,6 +616,20 @@ def _extract_page(entry, body_size, heading_sizes, repeated):
 
     for block_lines in entry["blocks"]:
         for line in block_lines:
+            if line.get("table"):
+                flush()
+                pending_number = None
+                elements.append(
+                    {
+                        "type": "table",
+                        "text": render_table(line["table"], line["header"]),
+                        "level": None,
+                        "page": page_number,
+                        "header": line["header"],
+                    }
+                )
+                continue
+
             text = clean_block_text(line["text"])
             if not text:
                 continue
