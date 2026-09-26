@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from generation.answer_generator import LLM_DEFAULTS, AnswerGenerator, ConversationStore, LLMClient
+from generation.answer_generator import AnswerGenerator, ConversationStore, LLMClient
 from retrieval.retriever import DEFAULT_MATCH_COUNT, DEFAULT_THRESHOLD, Retriever
 
 from api.rate_limit import chat_limit, retrieve_limit
@@ -26,21 +26,6 @@ ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 
-
-def _allowed_llms():
-    """
-    A request may pick its LLM, so without a list anyone could run the most
-    expensive model on our key. Defaults to the configured model only.
-    """
-    configured = os.getenv("ALLOWED_LLMS")
-    if configured:
-        return {item.strip().lower() for item in configured.split(",") if item.strip()}
-
-    default = LLMClient()
-    return {f"{default.provider}/{default.model}".lower()}
-
-
-ALLOWED_LLMS = _allowed_llms()
 
 
 @asynccontextmanager
@@ -155,8 +140,6 @@ class RetrieveRequest(BaseModel):
 class ChatRequest(BaseModel):
     question: str = Field(min_length=2, max_length=MAX_QUESTION_LENGTH)
     conversation_id: str | None = None
-    llm_provider: str | None = Field(default=None, description="local, gemini or openai")
-    llm_model: str | None = Field(default=None, max_length=100)
     temperature: float = Field(default=0.2, ge=0.0, le=1.0)
     match_count: int | None = Field(default=None, ge=1, le=50)
     threshold: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -189,6 +172,7 @@ class ChatResponse(BaseModel):
 @app.get("/health")
 def health():
     retriever = get_retriever()
+    llm = LLMClient()
     embedding_error = getattr(app.state, "embedding_error", None)
     mismatch = getattr(app.state, "embedding_mismatch", None)
 
@@ -199,8 +183,7 @@ def health():
         "embedding_ready": embedding_error is None,
         "embedding_error": embedding_error,
         "embedding_mismatch": getattr(app.state, "embedding_mismatch", None),
-        "llm_providers": list(LLM_DEFAULTS),
-        "allowed_llms": sorted(ALLOWED_LLMS),
+        "llm": f"{llm.provider}/{llm.model}",
     }
 
 
@@ -225,26 +208,9 @@ def retrieve(request: RetrieveRequest):
 
 @app.post("/chat", response_model=ChatResponse, dependencies=[Depends(chat_limit)])
 def chat(request: ChatRequest):
-    if request.llm_provider and request.llm_provider.lower() not in LLM_DEFAULTS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown llm_provider. Use one of: {', '.join(LLM_DEFAULTS)}",
-        )
-
     try:
-        llm = LLMClient(
-            provider=request.llm_provider,
-            model=request.llm_model,
-            temperature=request.temperature,
-        )
-        if f"{llm.provider}/{llm.model}".lower() not in ALLOWED_LLMS:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"That model is not available here. "
-                    f"Use one of: {', '.join(sorted(ALLOWED_LLMS))}"
-                ),
-            )
+        # The model comes from LLM_PROVIDER/LLM_MODEL only; requests cannot pick one.
+        llm = LLMClient(temperature=request.temperature)
         generator = AnswerGenerator(retriever=get_retriever(), llm=llm)
         return generator.answer(
             request.question,

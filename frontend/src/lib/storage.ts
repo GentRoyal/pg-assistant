@@ -65,8 +65,6 @@ export const defaultSettings = (): AppSettings => ({
   showChunks: true,
   showConfidence: true,
   disclaimerAccepted: false,
-  llmProvider: 'default',
-  llmModel: '',
 })
 
 export function loadSettings(): AppSettings {

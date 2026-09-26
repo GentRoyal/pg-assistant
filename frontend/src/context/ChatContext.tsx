@@ -183,8 +183,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             question: trimmed || 'Please review the attached file(s) in light of UI academic regulations.',
             conversation_id: serverId,
             files,
-            llmProvider: settings.llmProvider,
-            llmModel: settings.llmModel,
           },
           {
             apiBaseUrl: settings.apiBaseUrl,
@@ -244,8 +242,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       isSending,
       persist,
       settings.apiBaseUrl,
-      settings.llmProvider,
-      settings.llmModel,
       token,
     ],
   )

@@ -14,7 +14,7 @@ import { useChat } from '../context/ChatContext'
 import { useSettings } from '../context/SettingsContext'
 import { checkHealth } from '../lib/api'
 import { DEMO_AUTH } from '../lib/auth'
-import { LLM_PROVIDERS, type AppSettings, type LlmProvider } from '../types'
+import type { AppSettings } from '../types'
 
 type ConnectionState =
   | { kind: 'idle' }
@@ -278,32 +278,6 @@ export function SettingsPage() {
                   {connection.kind === 'error' ? (
                     <span className="text-xs text-red-700">{connection.message}</span>
                   ) : null}
-                </div>
-
-                <div className="border-b border-[var(--ui-line)] py-4">
-                  <p className="text-sm font-medium text-[var(--ui-ink)]">Answering model</p>
-                  <p className="mt-0.5 text-xs text-[var(--ui-muted)]">
-                    Which LLM writes the answer. API keys stay on the server; retrieval always
-                    uses the server's embedding model.
-                  </p>
-                  <select
-                    value={settings.llmProvider}
-                    onChange={(e) => updateSettings({ llmProvider: e.target.value as LlmProvider })}
-                    className="mt-3 w-full rounded-xl border border-[var(--ui-line)] bg-[var(--ui-soft)] px-3 py-2.5 text-sm outline-none focus:border-[var(--ui-navy)]"
-                  >
-                    {LLM_PROVIDERS.map((provider) => (
-                      <option key={provider.value} value={provider.value}>
-                        {provider.label} — {provider.hint}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    value={settings.llmModel}
-                    onChange={(e) => updateSettings({ llmModel: e.target.value })}
-                    placeholder="Model override (optional)"
-                    className="mt-2 w-full rounded-xl border border-[var(--ui-line)] bg-[var(--ui-soft)] px-3 py-2.5 text-sm outline-none focus:border-[var(--ui-navy)]"
-                  />
                 </div>
 
                 <p className="py-3 text-xs text-[var(--ui-muted)]">

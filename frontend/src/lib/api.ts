@@ -101,10 +101,6 @@ export async function askQuestion(
 
   const body: Record<string, unknown> = { question: payload.question }
   if (payload.conversation_id) body.conversation_id = payload.conversation_id
-  if (payload.llmProvider && payload.llmProvider !== 'default') {
-    body.llm_provider = payload.llmProvider
-  }
-  if (payload.llmModel?.trim()) body.llm_model = payload.llmModel.trim()
 
   let res: Response
   try {

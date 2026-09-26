@@ -49,23 +49,11 @@ export type Conversation = {
   messages: ChatMessage[]
 }
 
-/** 'default' leaves the choice to the server's LLM_PROVIDER setting */
-export type LlmProvider = 'default' | 'local' | 'gemini' | 'openai'
-
-export const LLM_PROVIDERS: Array<{ value: LlmProvider; label: string; hint: string }> = [
-  { value: 'default', label: 'Server default', hint: 'Whatever the API is configured with' },
-  { value: 'local', label: 'Local (Ollama)', hint: 'Free, needs Ollama running' },
-  { value: 'gemini', label: 'Gemini', hint: 'Free tier, needs a key on the server' },
-  { value: 'openai', label: 'OpenAI', hint: 'Paid, needs a key on the server' },
-]
-
 export type AskRequest = {
   question: string
   /** Server-side conversation id, not the local one */
   conversation_id?: string | null
   files?: File[]
-  llmProvider?: LlmProvider
-  llmModel?: string
 }
 
 /** Raw citation as returned by POST /chat */
@@ -116,7 +104,7 @@ export type HealthResponse = {
   embedding_ready?: boolean
   embedding_error?: string | null
   embedding_mismatch?: string | null
-  llm_providers: string[]
+  llm?: string
 }
 
 export type AppSettings = {
@@ -127,8 +115,6 @@ export type AppSettings = {
   showChunks: boolean
   showConfidence: boolean
   disclaimerAccepted: boolean
-  llmProvider: LlmProvider
-  llmModel: string
 }
 
 /** Allowed upload types for the chat composer */

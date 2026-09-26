@@ -137,8 +137,8 @@ class LLMClient:
                 if self.provider == "local" and "Connection" in type(error).__name__:
                     raise RuntimeError(
                         f"No local LLM is reachable at {self.base_url}. Start Ollama "
-                        f"('ollama serve' and 'ollama pull {self.model}'), or call the API "
-                        f"with llm_provider set to 'gemini' or 'openai'."
+                        f"('ollama serve' and 'ollama pull {self.model}'), or set "
+                        f"LLM_PROVIDER to 'gemini' or 'openai' in .env."
                     ) from error
                 if attempt == MAX_RETRIES - 1:
                     raise

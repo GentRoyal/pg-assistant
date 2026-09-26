@@ -34,9 +34,7 @@ The app talks to the FastAPI service in `../api`.
 ```json
 {
   "question": "How do I register for postgraduate courses?",
-  "conversation_id": "uuid returned by a previous reply, omit on the first message",
-  "llm_provider": "local | gemini | openai",
-  "llm_model": "optional override"
+  "conversation_id": "uuid returned by a previous reply, omit on the first message"
 }
 ```
 
