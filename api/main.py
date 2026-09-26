@@ -4,13 +4,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from generation.answer_generator import LLM_DEFAULTS, AnswerGenerator, ConversationStore, LLMClient
 from retrieval.retriever import DEFAULT_MATCH_COUNT, DEFAULT_THRESHOLD, Retriever
+
+from api.rate_limit import chat_limit, retrieve_limit
 
 
 @asynccontextmanager
@@ -164,7 +166,7 @@ def health():
     }
 
 
-@app.post("/retrieve")
+@app.post("/retrieve", dependencies=[Depends(retrieve_limit)])
 def retrieve(request: RetrieveRequest):
     try:
         results = get_retriever().search(
@@ -183,7 +185,7 @@ def retrieve(request: RetrieveRequest):
     return {"question": request.question, "count": len(results), "results": results}
 
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/chat", response_model=ChatResponse, dependencies=[Depends(chat_limit)])
 def chat(request: ChatRequest):
     if request.llm_provider and request.llm_provider.lower() not in LLM_DEFAULTS:
         raise HTTPException(

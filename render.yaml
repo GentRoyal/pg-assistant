@@ -44,6 +44,15 @@ services:
       - key: RETRIEVAL_SIMILARITY_THRESHOLD
         value: "0.3"
 
+      # Abuse protection. Limits are per client IP unless marked global; 0 turns
+      # a limit off.
+      - key: RATE_LIMIT_CHAT_PER_MINUTE
+        value: "10"
+      - key: RATE_LIMIT_CHAT_PER_DAY
+        value: "200"
+      - key: RATE_LIMIT_CHAT_GLOBAL_PER_DAY
+        value: "2000"
+
       # Set these in the Render dashboard, not here.
       - key: SUPABASE_URL
         sync: false
