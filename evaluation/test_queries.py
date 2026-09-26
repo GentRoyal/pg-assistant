@@ -150,6 +150,13 @@ TEST_QUERIES = [
         "expect": [r"programming"],
     },
     {
+        # Lowercase and unspaced, the way students often type course codes.
+        "question": "what is csc475 about",
+        "sources": [CS_HANDBOOK],
+        "pages": [31],
+        "expect": [r"ethic"],
+    },
+    {
         "question": "Who have been heads of the Department of Computer Science?",
         "sources": [CS_HANDBOOK],
         "pages": [5, 6],

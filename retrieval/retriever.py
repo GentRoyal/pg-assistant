@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -14,6 +15,15 @@ RRF_K = 60
 
 DEFAULT_MATCH_COUNT = int(os.getenv("RETRIEVAL_MATCH_COUNT") or 8)
 DEFAULT_THRESHOLD = float(os.getenv("RETRIEVAL_SIMILARITY_THRESHOLD") or 0.3)
+
+# Course codes such as "CSC 103" or "csc103". Embeddings barely register them and
+# plain keyword search returns matches unranked, so they get a search of their own.
+COURSE_CODE = re.compile(r"(?<![A-Za-z])([A-Za-z]{3})(\s?)(\d{3})(?!\d)")
+# Lowercase words that look like a prefix in "and 200 level" but are not codes.
+NOT_CODE_PREFIXES = {
+    "and", "are", "any", "all", "but", "for", "has", "had", "its", "not", "one",
+    "our", "per", "the", "two", "was", "who", "yet",
+}
 
 # documents!inner so that filters on the embedded table actually drop chunk rows.
 CHUNK_SELECT = (
@@ -34,6 +44,28 @@ def _normalise_keyword_row(row):
         }
     )
     return row
+
+
+def course_codes(question):
+    codes = []
+    for prefix, space, number in COURSE_CODE.findall(question):
+        if not prefix.isupper() and space and prefix.lower() in NOT_CODE_PREFIXES:
+            continue
+        code = (prefix.upper(), number)
+        if code not in codes:
+            codes.append(code)
+    return codes
+
+
+def _code_rank(row, codes):
+    """Sort key: the code in a heading beats the code in passing, then by mentions."""
+    patterns = [re.compile(rf"\b{prefix}\s?{number}\b", re.IGNORECASE) for prefix, number in codes]
+    headings = [row.get("section_title") or ""] + [
+        line for line in row["content"].splitlines() if line.startswith("#")
+    ]
+    in_heading = any(pattern.search(heading) for pattern in patterns for heading in headings)
+    mentions = sum(len(pattern.findall(row["content"])) for pattern in patterns)
+    return (not in_heading, -mentions)
 
 
 def _reciprocal_rank_fusion(ranked_lists):
@@ -106,6 +138,17 @@ class Retriever:
 
         return [_normalise_keyword_row(row) for row in (response.data or [])]
 
+    def code_search(self, question, match_count, filters):
+        codes = course_codes(question)
+        if not codes:
+            return []
+
+        # Documents write codes both ways, and the full-text parser treats
+        # "CSC103" as one token, so search for both spellings.
+        terms = " or ".join(f'"{prefix} {number}" or {prefix}{number}' for prefix, number in codes)
+        rows = self.keyword_search(terms, match_count * 4, filters)
+        return sorted(rows, key=lambda row: _code_rank(row, codes))[:match_count]
+
     def search(
         self,
         question,
@@ -125,10 +168,10 @@ class Retriever:
             results = vector_results
         else:
             keyword_results = self.keyword_search(question, match_count, filters)
+            code_results = self.code_search(question, match_count, filters)
+            extra = [ranked for ranked in (keyword_results, code_results) if ranked]
             results = (
-                _reciprocal_rank_fusion([vector_results, keyword_results])
-                if keyword_results
-                else vector_results
+                _reciprocal_rank_fusion([vector_results] + extra) if extra else vector_results
             )
 
         if collapse_sections:
