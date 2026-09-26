@@ -74,8 +74,8 @@ class Retriever:
         except Exception as error:
             if RPC_NAME in str(error) or "PGRST202" in str(error):
                 raise RuntimeError(
-                    f"The {RPC_NAME}() function is missing. Run database/schema.sql then "
-                    f"database/vector_search.sql in the Supabase SQL editor.\n\n{error}"
+                    f"The {RPC_NAME}() function is missing from Supabase. Check that "
+                    f"SUPABASE_URL points at the right project.\n\n{error}"
                 ) from error
             raise
 

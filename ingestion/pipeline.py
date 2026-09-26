@@ -104,8 +104,8 @@ def _insert_chunks(client, document_id, chunks):
             if "dimensions" in str(error):
                 raise RuntimeError(
                     f"{error}\n\nThe document_chunks.embedding column size does not match the "
-                    f"embedding model. Re-run database/schema.sql (it resizes the column), or set "
-                    f"EMBEDDING_PROVIDER/EMBEDDING_DIMENSIONS in .env to match the column."
+                    f"embedding model. Set EMBEDDING_PROVIDER/EMBEDDING_DIMENSIONS in .env to "
+                    f"match the column, or resize the column in the Supabase SQL editor."
                 ) from error
             raise
         inserted += len(batch)
@@ -117,11 +117,9 @@ def _insert_chunks(client, document_id, chunks):
 REQUIRED_DOCUMENT_COLUMNS = "source, content_hash, file_path, total_pages, embedding_model"
 
 SCHEMA_HINT = (
-    "The Supabase schema is not set up yet.\n"
-    "Open the Supabase SQL editor and run, in order:\n"
-    "  1. database/schema.sql\n"
-    "  2. database/vector_search.sql\n"
-    "Then re-run this command."
+    "The Supabase schema is not set up, or is missing columns this pipeline needs.\n"
+    "Check that SUPABASE_URL in .env points at the project with the documents and\n"
+    "document_chunks tables. The schema is not kept in this repo."
 )
 
 
