@@ -5,7 +5,6 @@ tiktoken
 numpy
 fastapi
 uvicorn
-#streamlit
 pytest
 
 # Local (free, offline) embeddings - EMBEDDING_PROVIDER=local
