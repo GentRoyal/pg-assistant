@@ -1,3 +1,4 @@
+import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -13,6 +14,33 @@ from generation.answer_generator import LLM_DEFAULTS, AnswerGenerator, Conversat
 from retrieval.retriever import DEFAULT_MATCH_COUNT, DEFAULT_THRESHOLD, Retriever
 
 from api.rate_limit import chat_limit, retrieve_limit
+
+# Browsers may only call the API from these sites. Set ALLOWED_ORIGINS to the
+# Vercel URL(s), comma separated. Local dev goes through the Vite proxy, which
+# is same-origin, so these defaults only matter when calling the API directly.
+ALLOWED_ORIGINS = [
+    origin.strip().rstrip("/")
+    for origin in (
+        os.getenv("ALLOWED_ORIGINS") or "http://localhost:5173,http://127.0.0.1:5173"
+    ).split(",")
+    if origin.strip()
+]
+
+
+def _allowed_llms():
+    """
+    A request may pick its LLM, so without a list anyone could run the most
+    expensive model on our key. Defaults to the configured model only.
+    """
+    configured = os.getenv("ALLOWED_LLMS")
+    if configured:
+        return {item.strip().lower() for item in configured.split(",") if item.strip()}
+
+    default = LLMClient()
+    return {f"{default.provider}/{default.model}".lower()}
+
+
+ALLOWED_LLMS = _allowed_llms()
 
 
 @asynccontextmanager
@@ -68,9 +96,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
@@ -82,12 +110,18 @@ async def unhandled_error(request: Request, error: Exception):
     the real error. Handling them here keeps the CORS headers on the response.
     """
     print(f"Unhandled error on {request.url.path}: {type(error).__name__}: {error}")
+
+    # Set by hand: this handler runs outside CORSMiddleware, so without it
+    # the browser drops the response and the caller sees a network failure.
+    headers = {"Vary": "Origin"}
+    origin = request.headers.get("origin", "").rstrip("/")
+    if origin in ALLOWED_ORIGINS:
+        headers["Access-Control-Allow-Origin"] = origin
+
     return JSONResponse(
         status_code=500,
         content={"detail": f"{type(error).__name__}: {error}"},
-        # Set by hand: this handler runs outside CORSMiddleware, so without it
-        # the browser drops the response and the caller sees a network failure.
-        headers={"Access-Control-Allow-Origin": "*"},
+        headers=headers,
     )
 
 _retriever = None
@@ -106,8 +140,11 @@ class Filters(BaseModel):
     academic_level: str | None = None
 
 
+MAX_QUESTION_LENGTH = 2000
+
+
 class RetrieveRequest(BaseModel):
-    question: str = Field(min_length=2)
+    question: str = Field(min_length=2, max_length=MAX_QUESTION_LENGTH)
     match_count: int = Field(default=DEFAULT_MATCH_COUNT, ge=1, le=50)
     threshold: float = Field(default=DEFAULT_THRESHOLD, ge=0.0, le=1.0)
     hybrid: bool = True
@@ -116,10 +153,10 @@ class RetrieveRequest(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    question: str = Field(min_length=2)
+    question: str = Field(min_length=2, max_length=MAX_QUESTION_LENGTH)
     conversation_id: str | None = None
     llm_provider: str | None = Field(default=None, description="local, gemini or openai")
-    llm_model: str | None = None
+    llm_model: str | None = Field(default=None, max_length=100)
     temperature: float = Field(default=0.2, ge=0.0, le=1.0)
     match_count: int | None = Field(default=None, ge=1, le=50)
     threshold: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -163,6 +200,7 @@ def health():
         "embedding_error": embedding_error,
         "embedding_mismatch": getattr(app.state, "embedding_mismatch", None),
         "llm_providers": list(LLM_DEFAULTS),
+        "allowed_llms": sorted(ALLOWED_LLMS),
     }
 
 
@@ -199,6 +237,14 @@ def chat(request: ChatRequest):
             model=request.llm_model,
             temperature=request.temperature,
         )
+        if f"{llm.provider}/{llm.model}".lower() not in ALLOWED_LLMS:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"That model is not available here. "
+                    f"Use one of: {', '.join(sorted(ALLOWED_LLMS))}"
+                ),
+            )
         generator = AnswerGenerator(retriever=get_retriever(), llm=llm)
         return generator.answer(
             request.question,

@@ -45,7 +45,9 @@ services:
         value: "0.3"
 
       # Abuse protection. Limits are per client IP unless marked global; 0 turns
-      # a limit off.
+      # a limit off. Only the models in ALLOWED_LLMS can be requested.
+      - key: ALLOWED_LLMS
+        value: openai/gpt-4o-mini
       - key: RATE_LIMIT_CHAT_PER_MINUTE
         value: "10"
       - key: RATE_LIMIT_CHAT_PER_DAY
@@ -54,6 +56,9 @@ services:
         value: "2000"
 
       # Set these in the Render dashboard, not here.
+      # ALLOWED_ORIGINS is the Vercel URL, e.g. https://your-app.vercel.app
+      - key: ALLOWED_ORIGINS
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SECRET_KEY
