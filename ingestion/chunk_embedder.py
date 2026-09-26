@@ -7,6 +7,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+try:
+    from ingestion.privacy import is_personal_record, redact_personal
+except ImportError:
+    from privacy import is_personal_record, redact_personal
+
 load_dotenv()
 
 # ---------------------------------------------------------------- chunking
@@ -74,7 +79,11 @@ def flatten_blocks(document):
     stack = []
 
     for page in document["pages"]:
+        # A directory page is one record split over several blocks.
+        personal_page = any(is_personal_record(block["text"]) for block in page["blocks"])
+
         for block in page["blocks"]:
+            block = dict(block, text=redact_personal(block["text"], personal_page))
             if block["type"] == "heading":
                 level = block.get("level") or 2
                 stack = [item for item in stack if item["level"] < level]
