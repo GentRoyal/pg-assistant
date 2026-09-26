@@ -208,6 +208,14 @@ COLUMN_MIN_BOXES = 4
 COLUMN_MIN_SHARE = 0.85
 COLUMN_MAX_CROSSINGS = 2
 RUNON_MIN_LENGTH = 10
+RUNNING_HEADER_EDGE_BLOCKS = 2
+RUNNING_HEADER_MAX_CHARS = 90
+RUNNING_HEADER_MIN_PAGES = 3
+PAGE_OFFSET_MIN_PAGES = 5
+MAX_SECTION_NUMBER = 30
+# Bare integers only: "44 Programmes" or "Handbook 50", not "4.2 Scope" or "1998".
+LEADING_NUMBER = re.compile(r"^\s*(\d{1,3})(?![\d.)])\b")
+TRAILING_NUMBER = re.compile(r"(?<![\d.,/-])\b(\d{1,3})\s*$")
 RUNON_CONNECTIVES = {
     "a", "an", "and", "as", "at", "by", "for", "from", "in", "of", "on",
     "or", "the", "to", "with",
@@ -705,6 +713,138 @@ def _extract_page(entry, body_size, heading_sizes, repeated):
     return elements, page_label, toc_hits
 
 
+# "2 (a) Similarly, ..." is a clause of a numbered rule, not a section title.
+NUMBERED_SUBITEM = re.compile(r"^\s*\d{1,2}\s*\(\s*[a-z]\s*\)", re.IGNORECASE)
+LEVEL_ONE_KEYWORD = re.compile(r"^(CHAPTER|PART|SECTION|APPENDIX|ANNEX|SCHEDULE)\b", re.IGNORECASE)
+BARE_LEADING_NUMBER = re.compile(r"^\s*(\d+)\s+\D")
+
+
+def _is_sentence_fragment(text):
+    """
+    Lines promoted to headings that are really pieces of sentences or figures:
+    "...bring with them to the", "2 (a) Similarly", "section of the Student
+    Affairs Division, where", "Section 10 of the ... Act 1962, as variously",
+    "44 Programmes".
+    """
+    words = text.split()
+    if not words:
+        return False
+    if words[-1].lower() in RUNON_CONNECTIVES or NUMBERED_SUBITEM.match(text):
+        return True
+    if text[0].islower():
+        return True
+    if LEVEL_ONE_KEYWORD.match(text) and len(words) > 8 and not text.isupper():
+        return True
+    number = BARE_LEADING_NUMBER.match(text)
+    return bool(number) and int(number.group(1)) >= MAX_SECTION_NUMBER
+
+
+def _running_header_key(text):
+    return re.sub(r"\d+", "#", text.lower()).strip()
+
+
+def _edge_numbers(text):
+    """A number at the very start or end of a short line, where page numbers sit."""
+    numbers = set()
+    for pattern in (LEADING_NUMBER, TRAILING_NUMBER):
+        match = pattern.search(text)
+        if match:
+            numbers.add(int(match.group(1)))
+    return numbers
+
+
+def _page_number_offset(pages):
+    """
+    The gap between PDF page numbers and printed page numbers, taken from the
+    numbers at page edges. None unless one gap clearly dominates.
+    """
+    edges = RUNNING_HEADER_EDGE_BLOCKS
+    offsets = Counter()
+    for page in pages:
+        blocks = page["blocks"]
+        found = set()
+        label = str(page.get("page_label") or "")
+        if label.isdigit():
+            found.add(page["page"] - int(label))
+        for block in blocks[:edges] + blocks[-edges:]:
+            if block["type"] != "table" and len(block["text"]) <= RUNNING_HEADER_MAX_CHARS:
+                found.update(page["page"] - number for number in _edge_numbers(block["text"]))
+        offsets.update(found)
+
+    ranked = offsets.most_common(2)
+    if not ranked:
+        return None
+    offset, hits = ranked[0]
+    runner_up = ranked[1][1] if len(ranked) > 1 else 0
+    if hits >= PAGE_OFFSET_MIN_PAGES and hits >= runner_up * 3:
+        return offset
+    return None
+
+
+def tidy_pages(pages):
+    """
+    Clean-up that needs the whole document and works on extracted blocks, so it
+    can also be re-applied to saved extractions without running OCR again.
+
+    - Running headers and footers carry the page number, so their exact text
+      differs on every page and the margin check in _profile_document misses
+      them. With the numbers masked they repeat; drop them from page edges.
+    - A "heading" that ends on a connective ("...bring with them to the") or
+      starts like "2 (a)" is part of a numbered rule, not a section title.
+    """
+    edges = RUNNING_HEADER_EDGE_BLOCKS
+    counts = Counter()
+    for page in pages:
+        blocks = page["blocks"]
+        keys = {
+            _running_header_key(block["text"])
+            for block in blocks[:edges] + blocks[-edges:]
+            if block["type"] != "table"
+            and re.search(r"\d", block["text"])
+            and len(block["text"]) <= RUNNING_HEADER_MAX_CHARS
+        }
+        counts.update(keys)
+    headers = {key for key, count in counts.items() if count >= RUNNING_HEADER_MIN_PAGES}
+    offset = _page_number_offset(pages)
+
+    def is_furniture(block, page_number):
+        if block["type"] == "table" or len(block["text"]) > RUNNING_HEADER_MAX_CHARS:
+            return False
+        if _running_header_key(block["text"]) in headers:
+            return True
+        # "44 Programmes": the printed page number glued to a section name.
+        return offset is not None and page_number - offset in _edge_numbers(block["text"])
+
+    for page in pages:
+        blocks = page["blocks"]
+        kept = []
+        for index, block in enumerate(blocks):
+            at_edge = index < edges or index >= len(blocks) - edges
+            if at_edge and is_furniture(block, page["page"]):
+                continue
+            if block["type"] == "heading" and _is_sentence_fragment(block["text"]):
+                block = dict(block, type="paragraph", level=None)
+            kept.append(block)
+        page["blocks"] = kept
+
+    pages = [page for page in pages if page["blocks"]]
+
+    # Decided after the headers are gone, since one sat between the pages.
+    previous_tail = None
+    for page in pages:
+        first = page["blocks"][0]
+        first["continues_previous_page"] = bool(
+            previous_tail
+            and previous_tail["type"] == "paragraph"
+            and first["type"] == "paragraph"
+            and OPEN_END.search(previous_tail["text"])
+            and LOWER_START.match(first["text"])
+        )
+        previous_tail = page["blocks"][-1]
+
+    return pages
+
+
 def _is_toc_page(elements, toc_hits):
     if toc_hits >= 4:
         return True
@@ -766,15 +906,6 @@ def extract_document(
                 skipped.append((entry["page"], "table of contents"))
                 continue
 
-            first = elements[0]
-            first["continues_previous_page"] = bool(
-                previous_tail
-                and previous_tail["type"] == "paragraph"
-                and first["type"] == "paragraph"
-                and OPEN_END.search(previous_tail["text"])
-                and LOWER_START.match(first["text"])
-            )
-
             pages.append(
                 {
                     "page": entry["page"],
@@ -783,7 +914,8 @@ def extract_document(
                     "ocr": entry["ocr"],
                 }
             )
-            previous_tail = elements[-1]
+
+        pages = tidy_pages(pages)
 
         metadata = pdf.metadata or {}
         title = (metadata.get("title") or "").strip() or pdf_path.stem.replace("_", " ").title()

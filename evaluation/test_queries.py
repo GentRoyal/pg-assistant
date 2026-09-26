@@ -109,7 +109,7 @@ TEST_QUERIES = [
         "question": "What does the university say about mode of dressing?",
         "sources": [STUDENT_HANDBOOK],
         "pages": [66],
-        "expect": [r"dress"],
+        "expect": [r"indecent|improper|reprimand|rustication"],
     },
     {
         "question": "What is the penalty for driving against traffic flow on campus?",

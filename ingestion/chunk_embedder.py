@@ -174,7 +174,11 @@ def _build_chunk(document, blocks, index, overlap_text):
         (block["text"] for block in blocks if block["type"] == "heading"),
         section_path[-1] if section_path else None,
     )
-    breadcrumb = " > ".join([document["title"]] + section_path)
+    # Only the nearest heading goes into the embedded breadcrumb. Heading levels
+    # guessed from scans are unreliable, and a misread top-level heading would
+    # otherwise be prefixed to every chunk after it. The full path stays in
+    # metadata["section_path"].
+    breadcrumb = " > ".join([document["title"]] + section_path[-1:])
 
     return {
         "chunk_index": index,
