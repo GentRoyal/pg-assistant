@@ -37,6 +37,21 @@ function toMessageAttachments(files: File[]): MessageAttachment[] {
   }))
 }
 
+const UNAVAILABLE_REPLY =
+  'The assistant is unavailable at the moment. Please try again in a little while.'
+
+/** Only errors a student can act on keep their own wording. */
+function friendlyError(err: unknown) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return 'You appear to be offline. Check your internet connection and try again.'
+  }
+  if (!(err instanceof ApiError)) return UNAVAILABLE_REPLY
+  // 400: attachments, explained by the client itself. 429: the API's rate-limit reply.
+  if (err.status === 400 || err.status === 429) return err.message
+  if (err.status === 422) return 'That question is too long. Please shorten it and try again.'
+  return UNAVAILABLE_REPLY
+}
+
 function mapSources(
   sources: Array<{
     document_title: string
@@ -211,10 +226,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         )
         persist(next, currentId)
       } catch (err) {
-        const message =
-          err instanceof ApiError
-            ? err.message
-            : 'Something went wrong while contacting the assistant. Please try again.'
+        // Students get a plain reply; the technical reason is for whoever
+        // debugs the deployment, so it goes to the console instead.
+        console.error('Chat request failed:', err)
+        const message = friendlyError(err)
         const errorMsg: ChatMessage = {
           id: uid(),
           role: 'assistant',
