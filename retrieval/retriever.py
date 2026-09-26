@@ -83,7 +83,6 @@ class Retriever:
 
     def keyword_search(self, question, match_count, filters):
         query = self.client.table(CHUNKS_TABLE).select(CHUNK_SELECT)
-        query = query.text_search("content", question, options={"type": "websearch", "config": "english"})
 
         if filters.get("filter_sources"):
             query = query.in_("documents.source", filters["filter_sources"])
@@ -93,7 +92,14 @@ class Retriever:
             query = query.eq("documents.academic_level", filters["filter_academic_level"])
 
         try:
-            response = query.limit(match_count).execute()
+            # text_search() returns a builder with no filter or limit methods, so it goes last.
+            response = (
+                query.limit(match_count)
+                .text_search(
+                    "content", question, options={"type": "web_search", "config": "english"}
+                )
+                .execute()
+            )
         except Exception as error:
             print(f"  keyword search unavailable ({error}); using vector results only")
             return []
