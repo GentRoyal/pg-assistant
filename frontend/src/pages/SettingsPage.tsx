@@ -255,17 +255,6 @@ export function SettingsPage() {
                     className="mt-3 w-full rounded-xl border border-[var(--ui-line)] bg-[var(--ui-soft)] px-3 py-2.5 text-sm outline-none focus:border-[var(--ui-navy)]"
                   />
                 </div>
-                <SettingRow
-                  title="Use mock API"
-                  description="Answers from canned demo responses instead of the real backend."
-                  control={
-                    <Toggle
-                      label="Use mock API"
-                      checked={settings.useMockApi}
-                      onChange={(v) => toggleSetting('useMockApi', v)}
-                    />
-                  }
-                />
                 <div className="flex flex-wrap items-center gap-3 border-b border-[var(--ui-line)] py-4">
                   <Button
                     variant="secondary"

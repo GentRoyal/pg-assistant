@@ -188,7 +188,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           },
           {
             apiBaseUrl: settings.apiBaseUrl,
-            useMock: settings.useMockApi,
             token: token ?? undefined,
           },
         )
@@ -245,7 +244,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       isSending,
       persist,
       settings.apiBaseUrl,
-      settings.useMockApi,
       settings.llmProvider,
       settings.llmModel,
       token,

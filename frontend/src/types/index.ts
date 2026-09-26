@@ -92,7 +92,7 @@ export type ChatApiResponse = {
   latency_ms: number
 }
 
-/** Normalised shape the UI consumes, whether it came from the API or the mock */
+/** Normalised shape the UI consumes */
 export type AskResponse = {
   answer: string
   sources: Array<{
@@ -123,7 +123,6 @@ export type AppSettings = {
   apiBaseUrl: string
   /** True once the user edits the base URL by hand; until then the build-time env wins */
   apiBaseUrlEdited: boolean
-  useMockApi: boolean
   showSources: boolean
   showChunks: boolean
   showConfidence: boolean

@@ -61,7 +61,6 @@ export function envApiBaseUrl() {
 export const defaultSettings = (): AppSettings => ({
   apiBaseUrl: envApiBaseUrl(),
   apiBaseUrlEdited: false,
-  useMockApi: String(import.meta.env.VITE_USE_MOCK_API ?? 'false') === 'true',
   showSources: true,
   showChunks: true,
   showConfidence: true,

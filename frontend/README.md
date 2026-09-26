@@ -11,7 +11,6 @@ React (Vite + TypeScript + Tailwind) chat UI for the University of Ibadan postgr
 - Answers with **sources**, **chunk text**, and **confidence**
 - Academic disclaimer banner
 - University of Ibadan inspired **indigo + gold** branding
-- Mock API mode for local demos without the Python backend
 
 ## Quick start
 
@@ -94,11 +93,10 @@ Nothing here is a security boundary.
 
 Not supported by the backend. The assistant answers from documents that have
 been ingested into Supabase, so files attached in the composer are rejected with
-an explanatory message unless mock mode is on.
+an explanatory message.
 
-Set `VITE_USE_MOCK_API=false` and `VITE_API_BASE_URL=http://localhost:8000` when
-the API is live (see `.env.example`). Both can also be changed at runtime in
-Settings.
+Set `VITE_API_BASE_URL=http://localhost:8000` when running the API locally (see
+`.env.example`). It can also be changed at runtime in Settings.
 
 ## Deploy
 
@@ -115,7 +113,6 @@ Set in the project's environment variables:
 
 ```
 VITE_API_BASE_URL=https://<your-api>.onrender.com
-VITE_USE_MOCK_API=false
 ```
 
 `VITE_API_BASE_URL` is inlined at build time, so changing it requires a

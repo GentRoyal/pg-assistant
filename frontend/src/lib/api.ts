@@ -84,14 +84,9 @@ export function toAskResponse(data: ChatApiResponse): AskResponse {
 
 export async function askQuestion(
   payload: AskRequest,
-  options: { apiBaseUrl?: string; useMock?: boolean; token?: string },
+  options: { apiBaseUrl?: string; token?: string },
 ): Promise<AskResponse> {
   const files = payload.files ?? []
-
-  if (options.useMock) {
-    const { mockAsk } = await import('./mockAnswers')
-    return mockAsk(payload.question, files)
-  }
 
   if (files.length > 0) {
     throw new ApiError(
