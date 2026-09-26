@@ -62,7 +62,6 @@ export const defaultSettings = (): AppSettings => ({
   apiBaseUrl: envApiBaseUrl(),
   apiBaseUrlEdited: false,
   showSources: true,
-  showChunks: true,
   showConfidence: true,
   disclaimerAccepted: false,
 })

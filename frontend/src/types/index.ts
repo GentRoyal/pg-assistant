@@ -112,7 +112,6 @@ export type AppSettings = {
   /** True once the user edits the base URL by hand; until then the build-time env wins */
   apiBaseUrlEdited: boolean
   showSources: boolean
-  showChunks: boolean
   showConfidence: boolean
   disclaimerAccepted: boolean
 }

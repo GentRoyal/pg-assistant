@@ -3,7 +3,7 @@ import { BookOpen, ChevronDown, ChevronUp, FileText, Image as ImageIcon } from '
 import { useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { ChatMessage } from '../../types'
+import type { ChatMessage, SourceChunk } from '../../types'
 import { useSettings } from '../../context/SettingsContext'
 
 function ConfidenceBadge({ value }: { value: number }) {
@@ -22,11 +22,54 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+type SourceDocument = { title: string; pages: number[] }
+
+/**
+ * The API cites chunks, but students only need to know which documents were
+ * used. Collapse chunks into one entry per document, and map each chunk's
+ * citation number to its document's number so the answer still matches the list.
+ */
+function groupByDocument(sources: SourceChunk[]) {
+  const documents: SourceDocument[] = []
+  const documentForChunk: number[] = []
+
+  for (const source of sources) {
+    let index = documents.findIndex((doc) => doc.title === source.documentTitle)
+    if (index === -1) {
+      documents.push({ title: source.documentTitle, pages: [] })
+      index = documents.length - 1
+    }
+    const pages = documents[index].pages
+    if (typeof source.page === 'number' && !pages.includes(source.page)) pages.push(source.page)
+    documentForChunk.push(index + 1)
+  }
+
+  for (const doc of documents) doc.pages.sort((a, b) => a - b)
+  return { documents, documentForChunk }
+}
+
+const CITATION = /\[(\d+(?:\s*,\s*\d+)*)\]/g
+
+function renumberCitations(content: string, documentForChunk: number[]) {
+  const renumbered = content.replace(CITATION, (match, group: string) => {
+    const numbers = group
+      .split(',')
+      .map((part) => documentForChunk[Number(part.trim()) - 1])
+      .filter((number): number is number => typeof number === 'number')
+    const unique = [...new Set(numbers)]
+    return unique.length ? `[${unique.join(', ')}]` : match
+  })
+  // Two chunks from one document read as "[1][1]"; show it once.
+  return renumbered.replace(/(\[[\d, ]+\])(?:\s*\1)+/g, '$1')
+}
+
 export function MessageBubble({ message }: { message: ChatMessage }) {
   const { settings } = useSettings()
   const [openSources, setOpenSources] = useState(false)
   const isUser = message.role === 'user'
   const hasSources = Boolean(message.sources?.length)
+  const { documents, documentForChunk } = groupByDocument(message.sources ?? [])
+  const content = hasSources ? renumberCitations(message.content, documentForChunk) : message.content
   const hasAttachments = Boolean(message.attachments?.length)
 
   return (
@@ -83,7 +126,7 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
             // Answers are markdown; react-markdown ignores raw HTML, so nothing from
             // the model is injected into the page.
             <div className="markdown-answer break-words text-[0.95rem]">
-              <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
+              <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
             </div>
           )
         ) : null}
@@ -104,36 +147,30 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
             >
               <span className="inline-flex items-center gap-2">
                 <BookOpen size={16} aria-hidden />
-                Sources ({message.sources!.length})
+                Sources ({documents.length})
               </span>
               {openSources ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
 
             {openSources ? (
-              <ul className="mt-2 space-y-2">
-                {message.sources!.map((source, index) => (
+              <ol className="mt-2 space-y-1.5">
+                {documents.map((doc, index) => (
                   <li
-                    key={source.id}
-                    className="rounded-xl border border-[var(--ui-line)] bg-[var(--ui-soft)] px-3 py-2.5 text-sm"
+                    key={doc.title}
+                    className="rounded-xl border border-[var(--ui-line)] bg-[var(--ui-soft)] px-3 py-2 text-sm"
                   >
-                    <p className="break-words font-semibold text-[var(--ui-navy)]">
-                      {index + 1}. {source.documentTitle}
-                      {source.section ? ` · ${source.section}` : ''}
-                      {typeof source.page === 'number' ? ` · p. ${source.page}` : ''}
-                    </p>
-                    {typeof source.score === 'number' ? (
-                      <p className="mt-0.5 text-xs text-[var(--ui-muted)]">
-                        Relevance: {source.score.toFixed(2)}
-                      </p>
-                    ) : null}
-                    {settings.showChunks ? (
-                      <p className="mt-1.5 break-words text-[var(--ui-muted)]">
-                        &ldquo;{source.chunkText}&rdquo;
-                      </p>
+                    <span className="break-words font-semibold text-[var(--ui-navy)]">
+                      {index + 1}. {doc.title}
+                    </span>
+                    {doc.pages.length ? (
+                      <span className="text-[var(--ui-muted)]">
+                        {' '}
+                        · {doc.pages.length > 1 ? 'pp.' : 'p.'} {doc.pages.join(', ')}
+                      </span>
                     ) : null}
                   </li>
                 ))}
-              </ul>
+              </ol>
             ) : null}
           </div>
         ) : null}

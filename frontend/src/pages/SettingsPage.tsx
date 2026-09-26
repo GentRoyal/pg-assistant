@@ -174,17 +174,6 @@ export function SettingsPage() {
                   }
                 />
                 <SettingRow
-                  title="Show retrieved chunk text"
-                  description="Include the quoted regulation excerpt inside each source."
-                  control={
-                    <Toggle
-                      label="Show retrieved chunk text"
-                      checked={settings.showChunks}
-                      onChange={(v) => toggleSetting('showChunks', v)}
-                    />
-                  }
-                />
-                <SettingRow
                   title="Show confidence"
                   description="Show match strength for each answer when available."
                   control={
