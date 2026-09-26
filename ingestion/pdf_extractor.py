@@ -198,6 +198,10 @@ OCR_MIN_CHARS = 40
 OCR_MIN_CONFIDENCE = 0.5
 OCR_DPI = 200
 OCR_SIZE_RATIO = 0.8
+COLUMN_MAX_SPAN = 0.6
+COLUMN_MIN_BOXES = 4
+COLUMN_MIN_SHARE = 0.85
+COLUMN_MAX_CROSSINGS = 2
 RUNON_MIN_LENGTH = 10
 RUNON_CONNECTIVES = {
     "a", "an", "and", "as", "at", "by", "for", "from", "in", "of", "on",
@@ -249,14 +253,24 @@ _OCR_ENGINE = None
 def _ocr_engine():
     global _OCR_ENGINE
     if _OCR_ENGINE is None:
-        from rapidocr_onnxruntime import RapidOCR
+        from rapidocr import LangRec, ModelType, OCRVersion, RapidOCR
 
-        _OCR_ENGINE = RapidOCR()
+        # The default recogniser is a Chinese/English model that drops the spaces
+        # between English words ("BriefHistoryoftheUniversity").
+        _OCR_ENGINE = RapidOCR(
+            params={
+                "Rec.lang_type": LangRec.EN,
+                "Rec.ocr_version": OCRVersion.PPOCRV5,
+                "Rec.model_type": ModelType.MOBILE,
+            }
+        )
     return _OCR_ENGINE
 
 
 def page_needs_ocr(page, min_chars=OCR_MIN_CHARS):
-    return len(page.get_text().strip()) < min_chars
+    # Scanned pages often carry a text layer holding only a running header
+    # padded with whitespace, so count visible characters only.
+    return len("".join(page.get_text().split())) < min_chars
 
 
 def _ocr_boxes(page, dpi):
@@ -269,13 +283,13 @@ def _ocr_boxes(page, dpi):
     if pixmap.n == 4:
         image = image[:, :, :3]
 
-    result, _ = _ocr_engine()(image)
-    if not result:
+    result = _ocr_engine()(image)
+    if result.boxes is None or not result.txts:
         return []
 
     scale = 72.0 / dpi
     boxes = []
-    for box, text, score in result:
+    for box, text, score in zip(result.boxes, result.txts, result.scores):
         text = normalize_unicode(text).strip()
         if not text or score < OCR_MIN_CONFIDENCE:
             continue
@@ -284,20 +298,79 @@ def _ocr_boxes(page, dpi):
         boxes.append(
             {
                 "text": text,
-                "x0": min(xs),
-                "y0": min(ys),
-                "y1": max(ys),
-                "height": max(ys) - min(ys),
+                "x0": float(min(xs)),
+                "x1": float(max(xs)),
+                "y0": float(min(ys)),
+                "y1": float(max(ys)),
+                "height": float(max(ys) - min(ys)),
             }
         )
     return sorted(boxes, key=lambda b: (b["y0"], b["x0"]))
 
 
-def _ocr_page_lines(page, dpi=OCR_DPI):
-    boxes = _ocr_boxes(page, dpi)
-    if not boxes:
-        return []
+def _side(box, gutter):
+    """-1 left column, 1 right column, 0 spanning both (a title)."""
+    width = max(box["x1"] - box["x0"], 1e-6)
+    left_share = (min(box["x1"], gutter) - box["x0"]) / width
+    if left_share >= COLUMN_MIN_SHARE:
+        return -1
+    if left_share <= 1 - COLUMN_MIN_SHARE:
+        return 1
+    return 0
 
+
+def _find_gutter(boxes, width):
+    """
+    The x position of the gap between two text columns, or None for a
+    single-column page. Wide boxes such as titles are ignored, and a few lines
+    that run slightly into the gap are tolerated.
+    """
+    narrow = [box for box in boxes if box["x1"] - box["x0"] < width * COLUMN_MAX_SPAN]
+    if len(narrow) < COLUMN_MIN_BOXES * 2:
+        return None
+
+    candidates = range(int(width * 0.3), int(width * 0.7) + 1)
+    crossings = {x: sum(box["x0"] < x < box["x1"] for box in narrow) for x in candidates}
+    fewest = min(crossings.values())
+    if fewest > max(COLUMN_MAX_CROSSINGS, len(narrow) * 0.1):
+        return None
+
+    best = [x for x in candidates if crossings[x] == fewest]
+    gutter = best[len(best) // 2]
+
+    sides = [_side(box, gutter) for box in narrow]
+    if sides.count(-1) < COLUMN_MIN_BOXES or sides.count(1) < COLUMN_MIN_BOXES:
+        return None
+    return gutter
+
+
+def _reading_order(boxes, width):
+    """
+    Split the page into groups read one after another. On a two-column page a
+    box spanning the gutter (a title) closes the band above it, and each band
+    is read left column first, so lines from the two columns are never joined.
+    """
+    gutter = _find_gutter(boxes, width)
+    if gutter is None:
+        return [boxes]
+
+    groups = []
+    left, right = [], []
+    for box in boxes:
+        side = _side(box, gutter)
+        if side == 0:
+            groups.extend(group for group in (left, right) if group)
+            groups.append([box])
+            left, right = [], []
+        elif side < 0:
+            left.append(box)
+        else:
+            right.append(box)
+    groups.extend(group for group in (left, right) if group)
+    return groups
+
+
+def _group_lines(boxes):
     lines = []
     for box in boxes:
         centre = (box["y0"] + box["y1"]) / 2
@@ -325,18 +398,31 @@ def _ocr_page_lines(page, dpi=OCR_DPI):
                 "y1": line["y1"],
             }
         )
+    return merged
+
+
+def _ocr_page_lines(page, dpi=OCR_DPI):
+    boxes = _ocr_boxes(page, dpi)
+    if not boxes:
+        return []
+
+    groups = [_group_lines(group) for group in _reading_order(boxes, page.rect.width)]
 
     gaps = [
-        merged[index]["y0"] - merged[index - 1]["y1"] for index in range(1, len(merged))
+        group[index]["y0"] - group[index - 1]["y1"]
+        for group in groups
+        for index in range(1, len(group))
     ]
     typical_gap = sorted(gaps)[len(gaps) // 2] if gaps else 0
 
-    blocks = [[merged[0]]]
-    for previous, line in zip(merged, merged[1:]):
-        if line["y0"] - previous["y1"] > max(typical_gap * 2, 4):
-            blocks.append([line])
-        else:
-            blocks[-1].append(line)
+    blocks = []
+    for group in groups:
+        blocks.append([group[0]])
+        for previous, line in zip(group, group[1:]):
+            if line["y0"] - previous["y1"] > max(typical_gap * 2, 4):
+                blocks.append([line])
+            else:
+                blocks[-1].append(line)
 
     return blocks
 
