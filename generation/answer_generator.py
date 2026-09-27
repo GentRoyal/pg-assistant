@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from database.supabase_client import get_client
 from generation.prompts import (
     ANSWER_TEMPLATE,
+    CONDENSE_SYSTEM,
     CONDENSE_TEMPLATE,
     NO_CONTEXT_REPLY,
     NO_EXCERPTS,
@@ -244,8 +245,9 @@ class AnswerGenerator:
         prompt = CONDENSE_TEMPLATE.format(
             history=render_history(history[-RECENT_TURNS:]), question=question
         )
-        rewritten = self.llm.complete(SYSTEM_PROMPT, [{"role": "user", "content": prompt}])
-        return rewritten.strip().strip('"') or question
+        rewritten = self.llm.complete(CONDENSE_SYSTEM, [{"role": "user", "content": prompt}])
+        # Markdown emphasis would end up in the keyword search.
+        return rewritten.replace("*", "").strip().strip('"') or question
 
     def summarise(self, messages):
         prompt = SUMMARY_TEMPLATE.format(history=render_history(messages))

@@ -72,10 +72,18 @@ call them "the University documents"."""
 # handle greetings and out-of-scope questions under the rules above.
 NO_EXCERPTS = "(No passages matched this question.)"
 
+# The rewrite is a search query, not an answer, so it gets its own instructions
+# rather than SYSTEM_PROMPT (whose formatting and greeting rules leak into it).
+CONDENSE_SYSTEM = """You rewrite a student's follow-up message into a standalone search question
+about the University of Ibadan. Output only the question, in plain text with no markdown."""
+
 CONDENSE_TEMPLATE = """Rewrite the follow-up question as a standalone question that can be
 understood without the conversation history. Keep the student's original wording where
-possible. Resolve pronouns and implied subjects using the history. Return only the
-rewritten question, nothing else.
+possible. Resolve pronouns and implied subjects using the history, and carry over the topic,
+programme or level it relies on (after a question about postgraduate pass marks, "what score
+do I need for an A?" becomes "what score do I need for an A in postgraduate courses?"). If
+the follow-up is already standalone, or is not a question about the University (a greeting,
+thanks, or something unrelated), return it unchanged. Return only the question, nothing else.
 
 Conversation so far:
 {history}
