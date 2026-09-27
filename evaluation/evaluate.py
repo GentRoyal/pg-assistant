@@ -16,6 +16,7 @@ CONTEXT_CHAR_BUDGET = 12000
 # Phrases the assistant uses when the excerpts do not answer the question.
 REFUSAL = re.compile(
     r"could not find|do(es)? not (contain|include|provide|specify|mention|state)|"
+    r"(don't|do not) have (this|that|any) information|"
     r"no information|not (available|covered|mentioned) in|only (help|assist) with|outside (of )?(what|the scope)",
     re.IGNORECASE,
 )
