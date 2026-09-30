@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field
 from generation.answer_generator import AnswerGenerator, ConversationStore, LLMClient
 from retrieval.retriever import DEFAULT_MATCH_COUNT, DEFAULT_THRESHOLD, Retriever
 
+from api.admin import fail_interrupted_documents
+from api.admin import router as admin_router
 from api.auth import require_admin, require_user
 from api.auth import router as auth_router
 from api.rate_limit import chat_limit, retrieve_limit
@@ -48,6 +50,7 @@ async def lifespan(app: FastAPI):
     if app.state.embedding_mismatch:
         print(f"WARNING: {app.state.embedding_mismatch}")
 
+    fail_interrupted_documents()
     yield
 
 
@@ -113,6 +116,7 @@ async def unhandled_error(request: Request, error: Exception):
     )
 
 app.include_router(auth_router)
+app.include_router(admin_router)
 
 _retriever = None
 

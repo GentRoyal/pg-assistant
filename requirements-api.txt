@@ -1,9 +1,9 @@
 # Runtime dependencies for the deployed API only.
 #
-# Ingestion (pymupdf, rapidocr, torch, transformers) is deliberately absent:
-# documents are ingested from a developer machine, and the server only queries
-# what is already in Supabase. Keeping torch out is what makes the API fit a
-# small instance.
+# OCR (rapidocr, onnxruntime, opencv) and torch/transformers are deliberately
+# absent: scanned PDFs are ingested from a developer machine, and keeping those
+# out is what makes the API fit a small instance. The server does process text
+# PDFs that admins upload, which needs only pymupdf.
 #
 # This works only with EMBEDDING_PROVIDER=openai or gemini. With
 # EMBEDDING_PROVIDER=local the server needs torch + transformers, so deploy
@@ -15,3 +15,7 @@ supabase
 python-dotenv
 openai
 tiktoken
+
+# Admin uploads: form parsing, and reading text PDFs on the server (no OCR)
+python-multipart
+pymupdf
