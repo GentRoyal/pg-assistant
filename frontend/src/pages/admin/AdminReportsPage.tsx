@@ -455,7 +455,7 @@ export function AdminReportsPage() {
                         <td className="px-4 py-3">{row.hits}</td>
                         <td className="px-4 py-3 capitalize">{row.status}</td>
                         <td className="px-4 py-3 text-xs text-[var(--ui-muted)]">
-                          {new Date(row.lastCitedAt).toLocaleDateString()}
+                          {row.lastCitedAt ? new Date(row.lastCitedAt).toLocaleDateString() : '—'}
                         </td>
                       </tr>
                     ))

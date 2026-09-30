@@ -32,6 +32,13 @@ function StatusPill({ status }: { status: AdminDocument['status'] }) {
   )
 }
 
+/** The server's reason for a failure, or a note such as skipped scanned pages. */
+function DocNote({ doc }: { doc: AdminDocument }) {
+  if (!doc.error) return null
+  const tone = doc.status === 'failed' ? 'text-[var(--ui-danger)]' : 'text-[var(--ui-muted)]'
+  return <p className={`mt-0.5 max-w-md text-xs ${tone}`}>{doc.error}</p>
+}
+
 function DocActions({
   doc,
   busy,
@@ -92,6 +99,18 @@ export function AdminDocumentsPage() {
   useEffect(() => {
     void reload()
   }, [reload])
+
+  // Uploads are processed on the server; refresh quietly until none are still processing.
+  const processing = docs.some((d) => d.status === 'processing')
+  useEffect(() => {
+    if (!processing) return
+    const timer = window.setInterval(() => {
+      fetchAdminDocuments(apiOpts)
+        .then(setDocs)
+        .catch(() => undefined)
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [processing, apiOpts])
 
   const onUpload = async (files: FileList | null) => {
     const file = files?.[0]
@@ -211,6 +230,7 @@ export function AdminDocumentsPage() {
                       <p className="text-xs text-[var(--ui-muted)]">
                         {doc.fileName} · {formatBytes(doc.sizeBytes)}
                       </p>
+                      <DocNote doc={doc} />
                     </div>
                     <StatusPill status={doc.status} />
                   </div>
@@ -249,6 +269,7 @@ export function AdminDocumentsPage() {
                         <p className="text-xs text-[var(--ui-muted)]">
                           {doc.fileName} · {formatBytes(doc.sizeBytes)}
                         </p>
+                        <DocNote doc={doc} />
                       </td>
                       <td className="px-4 py-3 text-[var(--ui-muted)]">{doc.documentType}</td>
                       <td className="px-4 py-3">{doc.pages || '—'}</td>

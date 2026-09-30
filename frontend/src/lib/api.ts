@@ -13,6 +13,13 @@ export function resolveApiBase(override?: string) {
   return base || '/api'
 }
 
+/** Fired when the API rejects the session (expired, or signed out elsewhere). */
+export const SESSION_EXPIRED_EVENT = 'pg-assistant:session-expired'
+
+export function notifySessionExpired() {
+  window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
+}
+
 export class ApiError extends Error {
   status: number
 
@@ -116,6 +123,7 @@ export async function askQuestion(
     )
   }
 
+  if (res.status === 401) notifySessionExpired()
   if (!res.ok) throw new ApiError(await readError(res), res.status)
 
   return toAskResponse((await res.json()) as ChatApiResponse)

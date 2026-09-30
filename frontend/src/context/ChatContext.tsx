@@ -46,6 +46,7 @@ function friendlyError(err: unknown) {
     return 'You appear to be offline. Check your internet connection and try again.'
   }
   if (!(err instanceof ApiError)) return UNAVAILABLE_REPLY
+  if (err.status === 401) return 'Your session has ended. Please sign in again.'
   if (err.status === 400 || err.status === 429) return err.message
   if (err.status === 422) return 'That question is too long. Please shorten it and try again.'
   return UNAVAILABLE_REPLY

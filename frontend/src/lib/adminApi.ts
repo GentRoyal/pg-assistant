@@ -5,7 +5,7 @@ import type {
   ReportDocumentRow,
   ReportQueryRow,
 } from '../types'
-import { resolveApiBase, ApiError } from './api'
+import { resolveApiBase, ApiError, notifySessionExpired } from './api'
 
 /**
  * HANDOFF FLAG for the backend engineer.
@@ -14,7 +14,7 @@ import { resolveApiBase, ApiError } from './api'
  *
  * Flip this only after auth + admin routes match the contract.
  */
-export const USE_MOCK_ADMIN = true
+export const USE_MOCK_ADMIN = false
 
 const now = Date.now()
 const day = 24 * 60 * 60 * 1000
@@ -234,6 +234,7 @@ async function apiFetch(
     headers,
     body: options.body,
   })
+  if (res.status === 401) notifySessionExpired()
   if (!res.ok) throw new ApiError(await readError(res), res.status)
   if (res.status === 204) return null
   return res.json()

@@ -133,6 +133,8 @@ export type AdminDocument = {
   uploadedAt: string
   updatedAt: string
   sizeBytes: number
+  /** Why processing failed, or a note such as skipped scanned pages */
+  error?: string | null
 }
 
 export type DashboardStats = {
@@ -166,7 +168,7 @@ export type ReportDocumentRow = {
   title: string
   documentType: string
   hits: number
-  lastCitedAt: string
+  lastCitedAt: string | null
   status: DocumentStatus
 }
 

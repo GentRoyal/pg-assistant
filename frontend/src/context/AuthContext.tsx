@@ -2,11 +2,13 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react'
-import { loginRequest, registerRequest } from '../lib/auth'
+import { SESSION_EXPIRED_EVENT } from '../lib/api'
+import { loginRequest, logoutRequest, registerRequest } from '../lib/auth'
 import { loadAuthSession, saveAuthSession } from '../lib/storage'
 import type { AuthSession, User, UserRole } from '../types'
 import { useSettings } from './SettingsContext'
@@ -50,8 +52,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(() => {
+    if (session?.token) void logoutRequest(session.token, settings.apiBaseUrl)
     setSession(null)
     saveAuthSession(null)
+  }, [session, settings.apiBaseUrl])
+
+  // The API rejected the token (expired or revoked): drop it so the app returns to sign-in.
+  useEffect(() => {
+    const expire = () => {
+      setSession(null)
+      saveAuthSession(null)
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, expire)
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, expire)
   }, [])
 
   const value = useMemo(

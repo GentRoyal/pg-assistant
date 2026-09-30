@@ -103,8 +103,8 @@ export function SignUpPage() {
               type="password"
               autoComplete="new-password"
               required
-              minLength={6}
-              placeholder="At least 6 characters"
+              minLength={8}
+              placeholder="At least 8 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-xl border border-[var(--ui-line)] bg-[var(--ui-soft)] px-3 py-2.5 outline-none placeholder:text-[var(--ui-muted)]/70 focus:border-[var(--ui-navy)]"
@@ -122,7 +122,7 @@ export function SignUpPage() {
               type="password"
               autoComplete="new-password"
               required
-              minLength={6}
+              minLength={8}
               placeholder="Re-enter password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
