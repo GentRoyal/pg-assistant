@@ -5,10 +5,12 @@ import { useAuth } from '../context/AuthContext'
 import { homePathForRole } from '../lib/auth'
 import { Button } from '../components/ui/Button'
 
-export function LoginPage() {
-  const { isAuthenticated, role, login } = useAuth()
+export function SignUpPage() {
+  const { isAuthenticated, role, register } = useAuth()
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -19,11 +21,21 @@ export function LoginPage() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
+
+    if (name.trim().length < 2) {
+      setError('Please enter your full name.')
+      return
+    }
+    if (password !== confirm) {
+      setError('Passwords do not match.')
+      return
+    }
+
     setLoading(true)
     try {
-      await login(email, password)
+      await register(name.trim(), email, password)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign-in failed.')
+      setError(err instanceof Error ? err.message : 'Could not create account.')
     } finally {
       setLoading(false)
     }
@@ -45,10 +57,25 @@ export function LoginPage() {
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-[var(--ui-navy)]">
             PG Assistant
           </h1>
-          <p className="mt-2 text-sm text-[var(--ui-muted)]">Sign in to continue</p>
+          <p className="mt-2 text-sm text-[var(--ui-muted)]">Create your student account</p>
         </div>
 
         <form className="mt-7 space-y-4" onSubmit={onSubmit} noValidate>
+          <div>
+            <label htmlFor="name" className="mb-1.5 block text-sm font-semibold text-[var(--ui-navy)]">
+              Full name
+            </label>
+            <input
+              id="name"
+              type="text"
+              autoComplete="name"
+              required
+              placeholder="Your name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-xl border border-[var(--ui-line)] bg-[var(--ui-soft)] px-3 py-2.5 outline-none placeholder:text-[var(--ui-muted)]/70 focus:border-[var(--ui-navy)]"
+            />
+          </div>
           <div>
             <label htmlFor="email" className="mb-1.5 block text-sm font-semibold text-[var(--ui-navy)]">
               Email
@@ -56,7 +83,7 @@ export function LoginPage() {
             <input
               id="email"
               type="email"
-              autoComplete="username"
+              autoComplete="email"
               required
               placeholder="you@ui.edu.ng"
               value={email}
@@ -74,12 +101,31 @@ export function LoginPage() {
             <input
               id="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete="new-password"
               required
               minLength={6}
-              placeholder="Enter your password"
+              placeholder="At least 6 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-xl border border-[var(--ui-line)] bg-[var(--ui-soft)] px-3 py-2.5 outline-none placeholder:text-[var(--ui-muted)]/70 focus:border-[var(--ui-navy)]"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="confirm"
+              className="mb-1.5 block text-sm font-semibold text-[var(--ui-navy)]"
+            >
+              Confirm password
+            </label>
+            <input
+              id="confirm"
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={6}
+              placeholder="Re-enter password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
               className="w-full rounded-xl border border-[var(--ui-line)] bg-[var(--ui-soft)] px-3 py-2.5 outline-none placeholder:text-[var(--ui-muted)]/70 focus:border-[var(--ui-navy)]"
             />
           </div>
@@ -91,17 +137,17 @@ export function LoginPage() {
           ) : null}
 
           <Button type="submit" className="w-full !min-h-11" disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign in'}
+            {loading ? 'Creating account…' : 'Create account'}
           </Button>
         </form>
 
         <p className="mt-6 text-center text-sm text-[var(--ui-muted)]">
-          New here?{' '}
+          Already have an account?{' '}
           <Link
-            to="/signup"
+            to="/login"
             className="font-semibold text-[var(--ui-navy)] underline-offset-2 hover:underline"
           >
-            Create an account
+            Sign in
           </Link>
         </p>
       </motion.div>

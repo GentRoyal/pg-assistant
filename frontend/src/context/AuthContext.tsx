@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { loginRequest } from '../lib/auth'
+import { loginRequest, registerRequest } from '../lib/auth'
 import { loadAuthSession, saveAuthSession } from '../lib/storage'
 import type { AuthSession, User, UserRole } from '../types'
 import { useSettings } from './SettingsContext'
@@ -19,6 +19,7 @@ type AuthContextValue = {
   isStudent: boolean
   role: UserRole | null
   login: (email: string, password: string) => Promise<User>
+  register: (name: string, email: string, password: string) => Promise<User>
   logout: () => void
 }
 
@@ -31,6 +32,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (email: string, password: string) => {
       const next = await loginRequest(email, password, settings.apiBaseUrl)
+      setSession(next)
+      saveAuthSession(next)
+      return next.user
+    },
+    [settings.apiBaseUrl],
+  )
+
+  const register = useCallback(
+    async (name: string, email: string, password: string) => {
+      const next = await registerRequest(name, email, password, settings.apiBaseUrl)
       setSession(next)
       saveAuthSession(next)
       return next.user
@@ -52,9 +63,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isStudent: session?.user.role === 'student',
       role: session?.user.role ?? null,
       login,
+      register,
       logout,
     }),
-    [session, login, logout],
+    [session, login, register, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

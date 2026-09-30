@@ -5,6 +5,7 @@ import { homePathForRole } from './lib/auth'
 import { AdminLayout } from './components/admin/AdminLayout'
 import { ChatPage } from './pages/ChatPage'
 import { LoginPage } from './pages/LoginPage'
+import { SignUpPage } from './pages/SignUpPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage'
 import { AdminDocumentsPage } from './pages/admin/AdminDocumentsPage'
@@ -38,6 +39,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignUpPage />} />
 
       <Route
         path="/"
