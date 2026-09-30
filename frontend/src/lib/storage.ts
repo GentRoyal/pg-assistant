@@ -1,17 +1,32 @@
 import type { AppSettings, AuthSession, Conversation } from '../types'
 
 const KEYS = {
-  conversations: 'ui-ara.conversations',
   settings: 'ui-ara.settings',
-  activeId: 'ui-ara.activeConversationId',
   sidebarOpen: 'ui-ara.sidebarOpenDesktop',
   auth: 'ui-ara.authSession',
 } as const
 
+function conversationKey(userId: string) {
+  return `ui-ara.conversations.${userId}`
+}
+
+function activeIdKey(userId: string) {
+  return `ui-ara.activeConversationId.${userId}`
+}
+
 export function loadAuthSession(): AuthSession | null {
   try {
     const raw = localStorage.getItem(KEYS.auth)
-    return raw ? (JSON.parse(raw) as AuthSession) : null
+    if (!raw) return null
+    const session = JSON.parse(raw) as AuthSession
+    // Migrate older demo role → student
+    if ((session.user as { role?: string }).role === 'demo') {
+      session.user.role = 'student'
+    }
+    if ((session.user as { role?: string }).role === 'staff') {
+      session.user.role = 'admin'
+    }
+    return session
   } catch {
     return null
   }
@@ -32,26 +47,37 @@ export function saveDesktopSidebarOpen(open: boolean) {
   localStorage.setItem(KEYS.sidebarOpen, String(open))
 }
 
-export function loadConversations(): Conversation[] {
+/** Per-student conversation store (prep for server sync). */
+export function loadConversations(userId: string): Conversation[] {
   try {
-    const raw = localStorage.getItem(KEYS.conversations)
-    return raw ? (JSON.parse(raw) as Conversation[]) : []
+    const raw = localStorage.getItem(conversationKey(userId))
+    if (raw) return JSON.parse(raw) as Conversation[]
+
+    // One-time migrate from legacy global key into this user's store
+    const legacy = localStorage.getItem('ui-ara.conversations')
+    if (legacy) {
+      const parsed = JSON.parse(legacy) as Conversation[]
+      saveConversations(userId, parsed)
+      return parsed
+    }
+    return []
   } catch {
     return []
   }
 }
 
-export function saveConversations(conversations: Conversation[]) {
-  localStorage.setItem(KEYS.conversations, JSON.stringify(conversations))
+export function saveConversations(userId: string, conversations: Conversation[]) {
+  localStorage.setItem(conversationKey(userId), JSON.stringify(conversations))
 }
 
-export function loadActiveId(): string | null {
-  return localStorage.getItem(KEYS.activeId)
+export function loadActiveId(userId: string): string | null {
+  return localStorage.getItem(activeIdKey(userId)) ?? localStorage.getItem('ui-ara.activeConversationId')
 }
 
-export function saveActiveId(id: string | null) {
-  if (!id) localStorage.removeItem(KEYS.activeId)
-  else localStorage.setItem(KEYS.activeId, id)
+export function saveActiveId(userId: string, id: string | null) {
+  const key = activeIdKey(userId)
+  if (!id) localStorage.removeItem(key)
+  else localStorage.setItem(key, id)
 }
 
 export function envApiBaseUrl() {
@@ -74,8 +100,6 @@ export function loadSettings(): AppSettings {
     const saved = JSON.parse(raw) as Partial<AppSettings>
     const merged = { ...defaultSettings(), ...saved }
 
-    // A redeploy must be able to change the API URL. Without this, a value
-    // cached in the browser from an earlier build wins forever.
     if (!saved.apiBaseUrlEdited) merged.apiBaseUrl = envApiBaseUrl()
 
     return merged

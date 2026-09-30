@@ -8,14 +8,17 @@ import {
 } from 'react'
 import { loginRequest } from '../lib/auth'
 import { loadAuthSession, saveAuthSession } from '../lib/storage'
-import type { AuthSession, User } from '../types'
+import type { AuthSession, User, UserRole } from '../types'
 import { useSettings } from './SettingsContext'
 
 type AuthContextValue = {
   user: User | null
   token: string | null
   isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<void>
+  isAdmin: boolean
+  isStudent: boolean
+  role: UserRole | null
+  login: (email: string, password: string) => Promise<User>
   logout: () => void
 }
 
@@ -30,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const next = await loginRequest(email, password, settings.apiBaseUrl)
       setSession(next)
       saveAuthSession(next)
+      return next.user
     },
     [settings.apiBaseUrl],
   )
@@ -44,6 +48,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       token: session?.token ?? null,
       isAuthenticated: Boolean(session?.token),
+      isAdmin: session?.user.role === 'admin',
+      isStudent: session?.user.role === 'student',
+      role: session?.user.role ?? null,
       login,
       logout,
     }),

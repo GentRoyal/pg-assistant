@@ -1,8 +1,10 @@
+export type UserRole = 'student' | 'admin'
+
 export type User = {
   id: string
   name: string
   email: string
-  role: 'student' | 'staff' | 'demo'
+  role: UserRole
 }
 
 export type AuthSession = {
@@ -116,9 +118,70 @@ export type AppSettings = {
   disclaimerAccepted: boolean
 }
 
+/** Admin document inventory */
+export type DocumentStatus = 'ready' | 'processing' | 'failed'
+
+export type AdminDocument = {
+  id: string
+  title: string
+  fileName: string
+  documentType: string
+  academicLevel: string
+  pages: number
+  chunks: number
+  status: DocumentStatus
+  uploadedAt: string
+  updatedAt: string
+  sizeBytes: number
+}
+
+export type DashboardStats = {
+  totalDocuments: number
+  totalChunks: number
+  totalPages: number
+  questionsToday: number
+  questionsWeek: number
+  activeStudents: number
+  conversations: number
+  avgLatencyMs: number
+  weakRetrievalRate: number
+  systemStatus: 'ok' | 'degraded' | 'offline'
+  questionsTrend: number[]
+  topDocuments: Array<{ title: string; hits: number }>
+  recentActivity: Array<{ id: string; label: string; at: string; tone: 'info' | 'success' | 'warn' }>
+}
+
+export type ReportQueryRow = {
+  id: string
+  askedAt: string
+  studentEmail: string
+  question: string
+  status: 'answered' | 'weak' | 'error'
+  latencyMs: number
+  topSource: string
+}
+
+export type ReportDocumentRow = {
+  id: string
+  title: string
+  documentType: string
+  hits: number
+  lastCitedAt: string
+  status: DocumentStatus
+}
+
+export type Paginated<T> = {
+  items: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 /** Allowed upload types for the chat composer */
 export const ATTACHMENT_ACCEPT =
   '.pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp,text/plain'
 
 export const ATTACHMENT_MAX_FILES = 5
 export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024 // 10 MB
+
+export const ADMIN_DOC_ACCEPT = '.pdf,application/pdf'
