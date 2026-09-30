@@ -7,7 +7,16 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { askQuestion, ApiError } from '../lib/api'
+import {
+  askQuestion,
+  ApiError,
+  deleteAllConversationsRequest,
+  deleteConversationRequest,
+  fetchConversationMessages,
+  listConversations,
+  renameConversationRequest,
+  type ServerConversation,
+} from '../lib/api'
 import {
   loadActiveId,
   loadConversations,
@@ -71,6 +80,27 @@ function mapSources(
   }))
 }
 
+/**
+ * The server holds each student's chats; this browser keeps a cached copy so
+ * the list shows instantly. Chats not yet answered exist only here.
+ */
+function mergeWithServer(local: Conversation[], server: ServerConversation[]): Conversation[] {
+  const cached = new Map(local.filter((c) => c.serverId).map((c) => [c.serverId, c]))
+  const fromServer = server.map((s): Conversation => {
+    const hit = cached.get(s.id)
+    if (hit) return { ...hit, title: s.title || hit.title, updatedAt: s.updated_at }
+    return {
+      id: s.id,
+      serverId: s.id,
+      title: s.title || 'Untitled chat',
+      createdAt: s.created_at,
+      updatedAt: s.updated_at,
+      messages: [],
+    }
+  })
+  return [...local.filter((c) => !c.serverId), ...fromServer]
+}
+
 type ChatContextValue = {
   conversations: Conversation[]
   activeConversation: Conversation | null
@@ -100,6 +130,67 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsSending(false)
   }, [userId])
 
+  const apiBaseUrl = settings.apiBaseUrl
+  const serverOptions = useMemo(() => ({ apiBaseUrl, token: token ?? undefined }), [apiBaseUrl, token])
+
+  const updateConversations = useCallback(
+    (update: (list: Conversation[]) => Conversation[]) => {
+      setConversations((list) => {
+        const next = update(list)
+        saveConversations(userId, next)
+        return next
+      })
+    },
+    [userId],
+  )
+
+  const loadMessages = useCallback(
+    async (serverId: string) => {
+      try {
+        const messages = await fetchConversationMessages(serverId, serverOptions)
+        updateConversations((list) =>
+          list.map((c) =>
+            c.serverId === serverId
+              ? {
+                  ...c,
+                  messages: messages.map(
+                    (m): ChatMessage => ({
+                      ...m,
+                      id: uid(),
+                      sources: m.sources ? mapSources(m.sources) : undefined,
+                    }),
+                  ),
+                }
+              : c,
+          ),
+        )
+      } catch (err) {
+        console.error('Could not load the chat:', err)
+      }
+    },
+    [serverOptions, updateConversations],
+  )
+
+  // Fetch the chat list from the server, so it follows the student to any device
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    listConversations(serverOptions)
+      .then((server) => {
+        if (cancelled) return
+        const merged = mergeWithServer(loadConversations(userId), server)
+        setConversations(merged)
+        saveConversations(userId, merged)
+
+        const active = merged.find((c) => c.id === loadActiveId(userId))
+        if (active?.serverId && active.messages.length === 0) void loadMessages(active.serverId)
+      })
+      .catch((err) => console.error('Could not load chats:', err))
+    return () => {
+      cancelled = true
+    }
+  }, [loadMessages, serverOptions, token, userId])
+
   const persist = useCallback(
     (next: Conversation[], nextActive: string | null) => {
       setConversations(next)
@@ -125,36 +216,58 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const selectConversation = useCallback(
     (id: string) => {
-      if (conversations.some((c) => c.id === id)) {
-        setActiveId(id)
-        saveActiveId(userId, id)
-      }
+      const conversation = conversations.find((c) => c.id === id)
+      if (!conversation) return
+      setActiveId(id)
+      saveActiveId(userId, id)
+      // Refresh from the server: the chat may have continued on another device
+      if (conversation.serverId && !isSending) void loadMessages(conversation.serverId)
     },
-    [conversations, userId],
+    [conversations, isSending, loadMessages, userId],
   )
 
   const deleteConversation = useCallback(
     (id: string) => {
+      const serverId = conversations.find((c) => c.id === id)?.serverId
       const next = conversations.filter((c) => c.id !== id)
       const nextActive = activeId === id ? (next[0]?.id ?? null) : activeId
       persist(next, nextActive)
+      if (serverId) {
+        deleteConversationRequest(serverId, serverOptions).catch((err) =>
+          console.error('Could not delete the chat on the server:', err),
+        )
+      }
     },
-    [activeId, conversations, persist],
+    [activeId, conversations, persist, serverOptions],
   )
 
   const renameConversation = useCallback(
     (id: string, title: string) => {
-      const next = conversations.map((c) =>
-        c.id === id ? { ...c, title: title.trim() || c.title, updatedAt: new Date().toISOString() } : c,
+      const trimmed = title.trim().replace(/\s+/g, ' ')
+      const conversation = conversations.find((c) => c.id === id)
+      if (!conversation || !trimmed || trimmed === conversation.title) return
+
+      persist(
+        conversations.map((c) => (c.id === id ? { ...c, title: trimmed } : c)),
+        activeId,
       )
-      persist(next, activeId)
+      if (conversation.serverId) {
+        renameConversationRequest(conversation.serverId, trimmed, serverOptions).catch((err) =>
+          console.error('Could not rename the chat on the server:', err),
+        )
+      }
     },
-    [activeId, conversations, persist],
+    [activeId, conversations, persist, serverOptions],
   )
 
   const clearAll = useCallback(() => {
     persist([], null)
-  }, [persist])
+    if (token) {
+      deleteAllConversationsRequest(serverOptions).catch((err) =>
+        console.error('Could not clear chats on the server:', err),
+      )
+    }
+  }, [persist, serverOptions, token])
 
   const sendMessage = useCallback(
     async (question: string, files: File[] = []) => {

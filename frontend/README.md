@@ -73,19 +73,28 @@ Conversation ids are owned by the server. The local conversation `id` is only a
 key for this browser; `serverId` holds the id the API assigned, and it is sent
 back on every follow-up so the assistant keeps its context.
 
-Other endpoints:
+Each student's chats live on the server, so they follow the student to any
+device. The browser keeps a cached copy so the sidebar shows instantly, then
+refreshes it from `GET /conversations` after sign-in. A chat's messages are
+fetched when it is opened. A chat that has not been answered yet exists only
+in the browser.
+
+Other endpoints (all need the signed-in user except `/health`):
 
 - `GET /health` — used by **Test connection** in Settings
-- `POST /retrieve` — search only, no LLM needed
-- `GET`/`DELETE /conversations/{id}` — server-side history
+- `GET /conversations` — the signed-in user's chats, most recently active first
+- `GET /conversations/{id}` — one chat and its messages
+- `PATCH /conversations/{id}` — rename (`{"title": "..."}`)
+- `DELETE /conversations/{id}` — delete one chat
+- `DELETE /conversations` — delete all the user's chats (**Clear history**)
+- `POST /retrieve` — search only, no LLM needed (admins only)
 
 ### Auth
 
-The sign-in layer is a **local demo**, not real authentication. `lib/auth.ts`
-tries `POST /auth/login` first and falls back to demo credentials when the
-backend does not implement it — which it currently does not. Chat requests send
-`Authorization: Bearer <token>` when a session exists; the API ignores it today.
-Nothing here is a security boundary.
+Sign-in is real: `lib/auth.ts` calls `POST /auth/login` and `POST /auth/register`,
+and every request sends `Authorization: Bearer <token>`. Students sign up
+themselves; admin accounts are created on the server with
+`scripts/create_admin.py`. A 401 from the API ends the session.
 
 ### Attachments
 

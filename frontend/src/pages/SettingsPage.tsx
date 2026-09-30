@@ -301,7 +301,7 @@ export function SettingsPage() {
 
       <Modal open={confirmClear} title="Clear chat history?" onClose={() => setConfirmClear(false)}>
         <p className="text-sm text-[var(--ui-muted)]">
-          This removes every conversation stored in this browser. It cannot be undone.
+          This deletes all your chats, on every device you use. It cannot be undone.
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="secondary" onClick={() => setConfirmClear(false)}>
