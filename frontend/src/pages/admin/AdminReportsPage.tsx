@@ -5,7 +5,6 @@ import {
   fetchAllQueryReportRows,
   fetchDocumentReport,
   fetchQueryReport,
-  USE_MOCK_ADMIN,
 } from '../../lib/adminApi'
 import { useAdminApiOptions } from '../../hooks/useAdminApiOptions'
 import { downloadCsv, toCsv } from '../../lib/csv'
@@ -179,7 +178,6 @@ export function AdminReportsPage() {
           <h1 className="text-xl font-bold tracking-tight text-[var(--ui-navy)] sm:text-2xl">Reports</h1>
           <p className="mt-1 text-sm text-[var(--ui-muted)]">
             Filterable, paginated reports for queries and document usage.
-            {USE_MOCK_ADMIN ? ' Demo dataset until backend reports APIs are live.' : ''}
           </p>
         </div>
         <Button

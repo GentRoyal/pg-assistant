@@ -94,7 +94,7 @@ export function AdminDashboardPage() {
           Overview
         </h1>
         <p className="mt-1 text-sm text-[var(--ui-muted)]">
-          Premium analytics for documents, student activity, and retrieval health.
+          Documents, student questions, and recent activity.
         </p>
       </div>
 
@@ -102,7 +102,7 @@ export function AdminDashboardPage() {
         <KpiCard
           label="Documents"
           value={formatNumber(stats.totalDocuments)}
-          hint={`${formatNumber(stats.totalChunks)} chunks · ${formatNumber(stats.totalPages)} pages`}
+          hint={`${formatNumber(stats.totalPages)} pages indexed`}
           icon={Files}
         />
         <KpiCard
@@ -118,9 +118,9 @@ export function AdminDashboardPage() {
           icon={Users}
         />
         <KpiCard
-          label="Avg latency"
+          label="Avg response"
           value={`${(stats.avgLatencyMs / 1000).toFixed(1)}s`}
-          hint={`${Math.round(stats.weakRetrievalRate * 100)}% weak retrieval`}
+          hint={`${Math.round(stats.weakRetrievalRate * 100)}% low-confidence answers`}
           icon={Zap}
         />
       </div>
@@ -139,7 +139,7 @@ export function AdminDashboardPage() {
                   : 'bg-amber-50 text-amber-800'
               }`}
             >
-              System {stats.systemStatus}
+              {stats.systemStatus === 'ok' ? 'Healthy' : 'Needs attention'}
             </span>
           </div>
           <SparkBars values={stats.questionsTrend} />
@@ -193,7 +193,7 @@ export function AdminDashboardPage() {
                       : 'bg-[var(--ui-soft)] text-[var(--ui-navy)]'
                 }`}
               >
-                {item.tone}
+                {item.tone === 'success' ? 'Done' : item.tone === 'warn' ? 'Alert' : 'Update'}
               </span>
             </li>
           ))}

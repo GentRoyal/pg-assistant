@@ -5,7 +5,6 @@ import {
   fetchAdminDocuments,
   replaceAdminDocument,
   uploadAdminDocument,
-  USE_MOCK_ADMIN,
 } from '../../lib/adminApi'
 import { useAdminApiOptions } from '../../hooks/useAdminApiOptions'
 import type { AdminDocument } from '../../types'
@@ -159,7 +158,6 @@ export function AdminDocumentsPage() {
           </h1>
           <p className="mt-1 text-sm text-[var(--ui-muted)]">
             Upload, replace, or remove regulation PDFs in the knowledge base.
-            {USE_MOCK_ADMIN ? ' Changes stay in this browser until the admin API is live.' : ''}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -292,8 +290,7 @@ export function AdminDocumentsPage() {
         onClose={() => setDeleteId(null)}
       >
         <p className="text-sm text-[var(--ui-muted)]">
-          This removes the document and its embeddings from the knowledge base
-          {USE_MOCK_ADMIN ? ' (demo — local only)' : ''}. This cannot be undone.
+          This removes the document from the assistant’s knowledge base. This cannot be undone.
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="secondary" onClick={() => setDeleteId(null)}>

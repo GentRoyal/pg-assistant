@@ -271,7 +271,7 @@ export async function fetchDashboardStats(options: AdminApiOptions = {}): Promis
     recentActivity: [
       {
         id: 'a1',
-        label: 'Registration Procedures uploaded — processing',
+        label: 'Registration Procedures uploaded — still processing',
         at: isoDaysAgo(0, 9),
         tone: 'info',
       },
@@ -283,13 +283,13 @@ export async function fetchDashboardStats(options: AdminApiOptions = {}): Promis
       },
       {
         id: 'a3',
-        label: 'Disciplinary Regulations ingest failed',
+        label: 'Disciplinary Regulations failed to upload',
         at: isoDaysAgo(2),
         tone: 'warn',
       },
       {
         id: 'a4',
-        label: 'Manual of Style re-indexed',
+        label: 'Manual of Style updated successfully',
         at: isoDaysAgo(5),
         tone: 'success',
       },
