@@ -10,22 +10,32 @@ Instead of relying only on the general knowledge of a Large Language Model (LLM)
 
 This helps improve the accuracy, relevance, and traceability of generated answers.
 
-## Frontend (ready for handoff)
+## Frontend
 
-The React app lives in [`frontend/`](./frontend/). Demo accounts, admin console stubs, and the backend admin contract are documented there:
+The React app lives in [`frontend/`](./frontend/):
 
 - [`frontend/DEMO.md`](./frontend/DEMO.md) — walkthrough
-- [`frontend/ADMIN_API.md`](./frontend/ADMIN_API.md) — admin endpoints the backend should implement
+- [`frontend/ADMIN_API.md`](./frontend/ADMIN_API.md) — auth and admin endpoints
 - [`frontend/README.md`](./frontend/README.md) — setup, chat API, deploy
 
 ```bash
 cd frontend && npm install && npm run dev
 ```
 
-| Role | Email | Password |
-| --- | --- | --- |
-| Student | `student@ui.edu.ng` | `demo1234` |
-| Admin | `admin@ui.edu.ng` | `admin1234` |
+## Accounts
+
+Students sign up on the sign-in page and must be signed in to chat. Admin accounts are
+created on the command line, never through the app:
+
+```bash
+python scripts/create_admin.py you@ui.edu.ng --name "Your Name"
+```
+
+It asks for the password (at least 8 characters). Running it for an existing account makes
+that account an admin and sets the new password.
+
+Before first use, run [`database/migrations/001_auth_and_admin.sql`](./database/migrations/001_auth_and_admin.sql)
+once in the Supabase SQL editor. It adds the accounts, sessions and admin console tables.
 
 ## RAG Workflow
 

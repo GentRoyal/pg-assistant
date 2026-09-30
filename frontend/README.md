@@ -4,7 +4,7 @@ React (Vite + TypeScript + Tailwind) chat UI for the University of Ibadan postgr
 
 ## Features
 
-- Role-based demo auth (**student** → chat, **admin** → console)
+- Accounts: **students** sign up and land on chat; **admins** land on the console
 - Student chatbot with per-user saved conversations
 - Admin console: analytics dashboard, documents CRUD, reports (filters + pagination + CSV export)
 - Source citations and confidence display
@@ -21,14 +21,9 @@ npm run dev
 
 Open http://localhost:5173
 
-| Role | Email | Password | Lands on |
-| --- | --- | --- | --- |
-| Student | `student@ui.edu.ng` | `demo1234` | Chat |
-| Admin | `admin@ui.edu.ng` | `admin1234` | `/admin` |
-
-Phase A uses **stubbed admin APIs** (`src/lib/adminApi.ts`, `USE_MOCK_ADMIN = true`) until the backend ships auth + document endpoints. Student chat already calls real `POST /chat`.
-
-**Handoff for backend:** see [`ADMIN_API.md`](./ADMIN_API.md) and the live demo script in [`DEMO.md`](./DEMO.md). When routes match, set `USE_MOCK_ADMIN = false`.
+Students create an account with **Sign up**. Admin accounts are created by the backend
+script `scripts/create_admin.py` (see the root README). Sign-in, chat and the admin console
+all use the real API; the endpoints are listed in [`ADMIN_API.md`](./ADMIN_API.md).
 
 ## Backend contract
 
