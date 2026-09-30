@@ -128,9 +128,9 @@ export function Sidebar({ open, onClose }: Props) {
             <div className="rounded-xl bg-white/5 px-3 py-2.5">
               <p className="truncate text-sm font-medium">{user?.name}</p>
               <p className="truncate text-xs text-white/55">{user?.email}</p>
-              {user?.role === 'demo' ? (
+              {user?.role === 'student' ? (
                 <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--ui-gold)]">
-                  Demo session
+                  Student
                 </p>
               ) : null}
               <Button

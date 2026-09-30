@@ -13,7 +13,7 @@ import { useAuth } from '../context/AuthContext'
 import { useChat } from '../context/ChatContext'
 import { useSettings } from '../context/SettingsContext'
 import { checkHealth } from '../lib/api'
-import { DEMO_AUTH } from '../lib/auth'
+import { STUDENT_DEMO } from '../lib/auth'
 import type { AppSettings } from '../types'
 
 type ConnectionState =
@@ -204,9 +204,9 @@ export function SettingsPage() {
                 <div className="border-b border-[var(--ui-line)] py-4">
                   <p className="text-sm font-medium text-[var(--ui-ink)]">{user?.name}</p>
                   <p className="mt-0.5 text-xs text-[var(--ui-muted)]">{user?.email}</p>
-                  {user?.role === 'demo' ? (
+                  {user?.role === 'student' ? (
                     <p className="mt-2 inline-flex rounded-full bg-[var(--ui-soft)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--ui-navy)]">
-                      Demo session
+                      Student
                     </p>
                   ) : null}
                 </div>
@@ -215,7 +215,7 @@ export function SettingsPage() {
                   <p className="mt-0.5 text-xs leading-relaxed text-[var(--ui-muted)]">
                     Local fake sign-in for UI demos. Prefers real{' '}
                     <code className="rounded bg-[var(--ui-soft)] px-1">POST /auth/login</code> when
-                    available. Demo: {DEMO_AUTH.email} / {DEMO_AUTH.password}
+                    available. Student: {STUDENT_DEMO.email} / {STUDENT_DEMO.password}
                   </p>
                 </div>
                 <div className="flex justify-end py-4">

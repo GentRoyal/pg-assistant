@@ -4,13 +4,11 @@ React (Vite + TypeScript + Tailwind) chat UI for the University of Ibadan postgr
 
 ## Features
 
-- Demo auth layer (fake login; ready for real `POST /auth/login`)
-- Open chat after sign-in
-- ChatGPT-style history sidebar + settings
-- File attachments (PDF, Word, TXT, images) with drag-and-drop
-- Answers with **sources**, **chunk text**, and **confidence**
-- Academic disclaimer banner
-- University of Ibadan inspired **indigo + gold** branding
+- Role-based demo auth (**student** → chat, **admin** → console)
+- Student chatbot with per-user saved conversations
+- Admin console: analytics dashboard, documents CRUD, reports (filters + pagination)
+- Source citations and confidence display
+- University of Ibadan inspired branding
 
 ## Quick start
 
@@ -23,7 +21,12 @@ npm run dev
 
 Open http://localhost:5173
 
-Demo login: `student@ui.edu.ng` / `demo1234`
+| Role | Email | Password | Lands on |
+| --- | --- | --- | --- |
+| Student | `student@ui.edu.ng` | `demo1234` | Chat |
+| Admin | `admin@ui.edu.ng` | `admin1234` | `/admin` |
+
+Phase A uses **stubbed admin APIs** (`src/lib/adminApi.ts`) until the backend ships auth + document endpoints. Student chat already calls real `POST /chat`.
 
 ## Backend contract
 
