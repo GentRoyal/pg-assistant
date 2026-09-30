@@ -2,17 +2,19 @@ import { motion } from 'framer-motion'
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { DEMO_AUTH } from '../lib/auth'
+import { ADMIN_DEMO, STUDENT_DEMO, homePathForRole } from '../lib/auth'
 import { Button } from '../components/ui/Button'
 
 export function LoginPage() {
-  const { isAuthenticated, login } = useAuth()
-  const [email, setEmail] = useState(DEMO_AUTH.email)
-  const [password, setPassword] = useState(DEMO_AUTH.password)
+  const { isAuthenticated, role, login } = useAuth()
+  const [email, setEmail] = useState(STUDENT_DEMO.email)
+  const [password, setPassword] = useState(STUDENT_DEMO.password)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  if (isAuthenticated) return <Navigate to="/" replace />
+  if (isAuthenticated && role) {
+    return <Navigate to={homePathForRole(role)} replace />
+  }
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -46,15 +48,40 @@ export function LoginPage() {
         </div>
 
         <div className="mt-5 rounded-xl border border-dashed border-[var(--ui-navy)]/25 bg-[var(--ui-soft)] px-3 py-2.5 text-xs text-[var(--ui-muted)]">
-          <span className="font-semibold text-[var(--ui-navy)]">Demo auth layer</span> — local fake
-          sign-in for UI demos. Swaps to real <code className="rounded bg-white px-1">POST /auth/login</code>{' '}
-          when the backend is ready.
+          <span className="font-semibold text-[var(--ui-navy)]">Role-based demo auth</span> — students
+          open the chatbot; admins open the console. Real{' '}
+          <code className="rounded bg-white px-1">POST /auth/login</code> will replace this when ready.
         </div>
 
         <h2 className="mt-5 text-lg font-semibold text-[var(--ui-navy)]">Sign in to continue</h2>
         <p className="mt-1 text-sm text-[var(--ui-muted)]">
-          Access chat history and ask about postgraduate regulations.
+          Choose a student or admin demo account below.
         </p>
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            className="rounded-xl border border-[var(--ui-line)] bg-[var(--ui-soft)] px-3 py-2.5 text-left text-xs transition hover:border-[var(--ui-navy)]/30"
+            onClick={() => {
+              setEmail(STUDENT_DEMO.email)
+              setPassword(STUDENT_DEMO.password)
+            }}
+          >
+            <span className="block font-semibold text-[var(--ui-navy)]">Student</span>
+            <span className="text-[var(--ui-muted)]">Chat assistant</span>
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border border-[var(--ui-line)] bg-[var(--ui-soft)] px-3 py-2.5 text-left text-xs transition hover:border-[var(--ui-navy)]/30"
+            onClick={() => {
+              setEmail(ADMIN_DEMO.email)
+              setPassword(ADMIN_DEMO.password)
+            }}
+          >
+            <span className="block font-semibold text-[var(--ui-navy)]">Admin</span>
+            <span className="text-[var(--ui-muted)]">Dashboard & docs</span>
+          </button>
+        </div>
 
         <form className="mt-5 space-y-4" onSubmit={onSubmit} noValidate>
           <div>
@@ -98,9 +125,14 @@ export function LoginPage() {
           </Button>
         </form>
 
-        <p className="mt-4 text-center text-xs text-[var(--ui-muted)]">
-          Demo: <strong>{DEMO_AUTH.email}</strong> / <strong>{DEMO_AUTH.password}</strong>
-        </p>
+        <div className="mt-4 space-y-1 text-center text-xs text-[var(--ui-muted)]">
+          <p>
+            Student: <strong>{STUDENT_DEMO.email}</strong> / <strong>{STUDENT_DEMO.password}</strong>
+          </p>
+          <p>
+            Admin: <strong>{ADMIN_DEMO.email}</strong> / <strong>{ADMIN_DEMO.password}</strong>
+          </p>
+        </div>
       </motion.div>
     </div>
   )

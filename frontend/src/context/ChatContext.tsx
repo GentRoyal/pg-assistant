@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -40,13 +41,11 @@ function toMessageAttachments(files: File[]): MessageAttachment[] {
 const UNAVAILABLE_REPLY =
   'The assistant is unavailable at the moment. Please try again in a little while.'
 
-/** Only errors a student can act on keep their own wording. */
 function friendlyError(err: unknown) {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return 'You appear to be offline. Check your internet connection and try again.'
   }
   if (!(err instanceof ApiError)) return UNAVAILABLE_REPLY
-  // 400: attachments, explained by the client itself. 429: the API's rate-limit reply.
   if (err.status === 400 || err.status === 429) return err.message
   if (err.status === 422) return 'That question is too long. Please shorten it and try again.'
   return UNAVAILABLE_REPLY
@@ -86,18 +85,29 @@ type ChatContextValue = {
 const ChatContext = createContext<ChatContextValue | null>(null)
 
 export function ChatProvider({ children }: { children: ReactNode }) {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
+  const userId = user?.id ?? 'anonymous'
   const { settings } = useSettings()
-  const [conversations, setConversations] = useState<Conversation[]>(() => loadConversations())
-  const [activeId, setActiveId] = useState<string | null>(() => loadActiveId())
+  const [conversations, setConversations] = useState<Conversation[]>(() => loadConversations(userId))
+  const [activeId, setActiveId] = useState<string | null>(() => loadActiveId(userId))
   const [isSending, setIsSending] = useState(false)
 
-  const persist = useCallback((next: Conversation[], nextActive: string | null) => {
-    setConversations(next)
-    setActiveId(nextActive)
-    saveConversations(next)
-    saveActiveId(nextActive)
-  }, [])
+  // Reload this student's chats when the signed-in user changes
+  useEffect(() => {
+    setConversations(loadConversations(userId))
+    setActiveId(loadActiveId(userId))
+    setIsSending(false)
+  }, [userId])
+
+  const persist = useCallback(
+    (next: Conversation[], nextActive: string | null) => {
+      setConversations(next)
+      setActiveId(nextActive)
+      saveConversations(userId, next)
+      saveActiveId(userId, nextActive)
+    },
+    [userId],
+  )
 
   const createConversation = useCallback(() => {
     const now = new Date().toISOString()
@@ -116,10 +126,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     (id: string) => {
       if (conversations.some((c) => c.id === id)) {
         setActiveId(id)
-        saveActiveId(id)
+        saveActiveId(userId, id)
       }
     },
-    [conversations],
+    [conversations, userId],
   )
 
   const deleteConversation = useCallback(
@@ -226,8 +236,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         )
         persist(next, currentId)
       } catch (err) {
-        // Students get a plain reply; the technical reason is for whoever
-        // debugs the deployment, so it goes to the console instead.
         console.error('Chat request failed:', err)
         const message = friendlyError(err)
         const errorMsg: ChatMessage = {
@@ -251,14 +259,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setIsSending(false)
       }
     },
-    [
-      activeId,
-      conversations,
-      isSending,
-      persist,
-      settings.apiBaseUrl,
-      token,
-    ],
+    [activeId, conversations, isSending, persist, settings.apiBaseUrl, token],
   )
 
   const activeConversation = useMemo(
