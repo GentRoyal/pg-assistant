@@ -88,7 +88,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -260,6 +260,35 @@ def _own_conversation(store, conversation_id, user):
     if not visible:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return conversation
+
+
+class RenameRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+
+
+# The chat list is always the caller's own, admins included; the admin
+# reports are where everyone's questions are visible.
+@app.get("/conversations")
+def list_conversations(user=Depends(require_user)):
+    store = ConversationStore(get_retriever().client)
+    return {"conversations": store.list_for_user(user["id"])}
+
+
+@app.delete("/conversations", status_code=204)
+def delete_all_conversations(user=Depends(require_user)):
+    ConversationStore(get_retriever().client).delete_for_user(user["id"])
+
+
+@app.patch("/conversations/{conversation_id}")
+def rename_conversation(conversation_id: str, request: RenameRequest, user=Depends(require_user)):
+    store = ConversationStore(get_retriever().client)
+    _own_conversation(store, conversation_id, user)
+
+    title = " ".join(request.title.split())
+    if not title:
+        raise HTTPException(status_code=422, detail="The chat name cannot be empty.")
+    store.rename(conversation_id, title)
+    return {"id": conversation_id, "title": title}
 
 
 @app.get("/conversations/{conversation_id}")

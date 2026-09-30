@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -184,6 +185,17 @@ class ConversationStore:
             query = query.limit(limit)
         return query.execute().data or []
 
+    def list_for_user(self, user_id):
+        return (
+            self.client.table(CONVERSATIONS_TABLE)
+            .select("id, title, created_at, updated_at")
+            .eq("user_id", user_id)
+            .order("updated_at", desc=True)
+            .execute()
+            .data
+            or []
+        )
+
     def add_message(self, conversation_id, role, content, sources=None):
         self.client.table(MESSAGES_TABLE).insert(
             {
@@ -193,6 +205,15 @@ class ConversationStore:
                 "sources": sources or [],
             }
         ).execute()
+        # Nothing in the database bumps updated_at, and the chat list is ordered by it.
+        self.client.table(CONVERSATIONS_TABLE).update(
+            {"updated_at": datetime.now(timezone.utc).isoformat()}
+        ).eq("id", conversation_id).execute()
+
+    def rename(self, conversation_id, title):
+        self.client.table(CONVERSATIONS_TABLE).update({"title": title}).eq(
+            "id", conversation_id
+        ).execute()
 
     def set_summary(self, conversation_id, summary):
         self.client.table(CONVERSATIONS_TABLE).update({"summary": summary}).eq(
@@ -201,6 +222,9 @@ class ConversationStore:
 
     def delete(self, conversation_id):
         self.client.table(CONVERSATIONS_TABLE).delete().eq("id", conversation_id).execute()
+
+    def delete_for_user(self, user_id):
+        self.client.table(CONVERSATIONS_TABLE).delete().eq("user_id", user_id).execute()
 
 
 def keep_cited(answer, count):
