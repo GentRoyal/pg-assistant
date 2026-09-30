@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field
 from generation.answer_generator import AnswerGenerator, ConversationStore, LLMClient
 from retrieval.retriever import DEFAULT_MATCH_COUNT, DEFAULT_THRESHOLD, Retriever
 
+from api.auth import require_admin, require_user
+from api.auth import router as auth_router
 from api.rate_limit import chat_limit, retrieve_limit
 
 # Browsers may only call the API from these sites. Set ALLOWED_ORIGINS to the
@@ -45,6 +47,7 @@ async def lifespan(app: FastAPI):
     app.state.embedding_mismatch = _check_stored_vectors(retriever)
     if app.state.embedding_mismatch:
         print(f"WARNING: {app.state.embedding_mismatch}")
+
     yield
 
 
@@ -82,7 +85,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -108,6 +111,8 @@ async def unhandled_error(request: Request, error: Exception):
         content={"detail": f"{type(error).__name__}: {error}"},
         headers=headers,
     )
+
+app.include_router(auth_router)
 
 _retriever = None
 
@@ -187,7 +192,8 @@ def health():
     }
 
 
-@app.post("/retrieve", dependencies=[Depends(retrieve_limit)])
+# A debugging aid for the team, so admins only.
+@app.post("/retrieve", dependencies=[Depends(retrieve_limit), Depends(require_admin)])
 def retrieve(request: RetrieveRequest):
     try:
         results = get_retriever().search(
@@ -206,8 +212,16 @@ def retrieve(request: RetrieveRequest):
     return {"question": request.question, "count": len(results), "results": results}
 
 
+def _log_failed_question(question, user):
+    """A question that errored still counts in the admin reports."""
+    try:
+        get_retriever().log_query(question, user=user, status="error", latency_ms=0)
+    except Exception as error:
+        print(f"  query_logs write failed: {error}")
+
+
 @app.post("/chat", response_model=ChatResponse, dependencies=[Depends(chat_limit)])
-def chat(request: ChatRequest):
+def chat(request: ChatRequest, user=Depends(require_user)):
     try:
         # The model comes from LLM_PROVIDER/LLM_MODEL only; requests cannot pick one.
         llm = LLMClient(temperature=request.temperature)
@@ -221,28 +235,40 @@ def chat(request: ChatRequest):
             document_type=request.filters.document_type,
             academic_level=request.filters.academic_level,
             hybrid=request.hybrid,
+            user=user,
         )
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except RuntimeError as error:
+        _log_failed_question(request.question, user)
         raise HTTPException(status_code=503, detail=str(error)) from error
+    except Exception:
+        _log_failed_question(request.question, user)
+        raise
+
+
+def _own_conversation(store, conversation_id, user):
+    """Students see only their own conversations; admins can open any."""
+    conversation = store.get(conversation_id)
+    visible = conversation is not None and (
+        user["role"] == "admin" or conversation.get("user_id") in (None, user["id"])
+    )
+    if not visible:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return conversation
 
 
 @app.get("/conversations/{conversation_id}")
-def get_conversation(conversation_id: str):
+def get_conversation(conversation_id: str, user=Depends(require_user)):
     store = ConversationStore(get_retriever().client)
-    conversation = store.get(conversation_id)
-    if conversation is None:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-
+    conversation = _own_conversation(store, conversation_id, user)
     return {"conversation": conversation, "messages": store.messages(conversation_id)}
 
 
 @app.delete("/conversations/{conversation_id}")
-def delete_conversation(conversation_id: str):
+def delete_conversation(conversation_id: str, user=Depends(require_user)):
     store = ConversationStore(get_retriever().client)
-    if store.get(conversation_id) is None:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    _own_conversation(store, conversation_id, user)
 
     store.delete(conversation_id)
     return {"deleted": conversation_id}

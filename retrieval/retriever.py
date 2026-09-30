@@ -179,12 +179,19 @@ class Retriever:
 
         return results[:match_count]
 
-    def log_query(self, question, answer=None, results=None):
+    def log_query(self, question, answer=None, results=None, user=None, **details):
+        """
+        details: status ("answered", "weak", "error"), latency_ms, top_source and
+        cited_document_ids, which feed the admin dashboard and reports.
+        """
         payload = {
             "question": question,
             "answer": answer,
             "retrieved_chunk_ids": [result["id"] for result in (results or [])],
         }
+        if user:
+            payload.update({"user_id": user["id"], "student_email": user["email"]})
+        payload.update({key: value for key, value in details.items() if value is not None})
         self.client.table("query_logs").insert(payload).execute()
 
 

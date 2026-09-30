@@ -25,3 +25,5 @@ Thumbs.db
 data/results/
 tests/
 *.sql
+# Migrations are run by hand in the Supabase SQL editor, so they are kept.
+!database/migrations/*.sql

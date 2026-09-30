@@ -156,8 +156,10 @@ class ConversationStore:
     def __init__(self, client=None):
         self.client = client or get_client()
 
-    def create(self, title=None, llm_provider=None, llm_model=None):
+    def create(self, title=None, llm_provider=None, llm_model=None, user_id=None):
         payload = {"title": title, "llm_provider": llm_provider, "llm_model": llm_model}
+        if user_id:
+            payload["user_id"] = user_id
         response = self.client.table(CONVERSATIONS_TABLE).insert(payload).execute()
         return response.data[0]["id"]
 
@@ -277,18 +279,24 @@ class AnswerGenerator:
         document_type=None,
         academic_level=None,
         hybrid=True,
+        user=None,
     ):
         started = time.time()
+        user_id = user["id"] if user else None
 
         if conversation_id is None:
             conversation_id = self.store.create(
-                title=question[:120], llm_provider=self.llm.provider, llm_model=self.llm.model
+                title=question[:120],
+                llm_provider=self.llm.provider,
+                llm_model=self.llm.model,
+                user_id=user_id,
             )
             conversation = {"summary": None}
             history = []
         else:
             conversation = self.store.get(conversation_id)
-            if conversation is None:
+            # Another student's conversation is reported as missing, not forbidden.
+            if conversation is None or conversation.get("user_id") not in (None, user_id):
                 raise LookupError(f"Conversation {conversation_id} not found")
             history = self.store.messages(conversation_id)
 
@@ -346,8 +354,21 @@ class AnswerGenerator:
         self.store.add_message(conversation_id, "user", question)
         self.store.add_message(conversation_id, "assistant", answer_text, citations)
 
+        latency_ms = int((time.time() - started) * 1000)
+        cited = [results[old - 1] for old in used]
+        cited_documents = list(dict.fromkeys(r["document_id"] for r in cited if r.get("document_id")))
         try:
-            self.retriever.log_query(question, answer=answer_text, results=results)
+            self.retriever.log_query(
+                question,
+                answer=answer_text,
+                results=results,
+                user=user,
+                # An answer that cites nothing did not find what was asked.
+                status="answered" if cited else "weak",
+                latency_ms=latency_ms,
+                top_source=cited[0].get("title") if cited else None,
+                cited_document_ids=cited_documents,
+            )
         except Exception as error:
             print(f"  query_logs write failed: {error}")
 
@@ -358,5 +379,5 @@ class AnswerGenerator:
             "answer": answer_text,
             "citations": citations,
             "llm": f"{self.llm.provider}/{self.llm.model}",
-            "latency_ms": int((time.time() - started) * 1000),
+            "latency_ms": latency_ms,
         }
