@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Activity, Files, MessageSquare, Users, Zap } from 'lucide-react'
+import { useAdminApiOptions } from '../../hooks/useAdminApiOptions'
 import { fetchDashboardStats } from '../../lib/adminApi'
 import type { DashboardStats } from '../../types'
 
@@ -50,14 +51,21 @@ function KpiCard({
 }
 
 export function AdminDashboardPage() {
+  const apiOpts = useAdminApiOptions()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
-    fetchDashboardStats()
+    setLoading(true)
+    setError(null)
+    fetchDashboardStats(apiOpts)
       .then((data) => {
         if (alive) setStats(data)
+      })
+      .catch((err) => {
+        if (alive) setError(err instanceof Error ? err.message : 'Could not load analytics.')
       })
       .finally(() => {
         if (alive) setLoading(false)
@@ -65,10 +73,18 @@ export function AdminDashboardPage() {
     return () => {
       alive = false
     }
-  }, [])
+  }, [apiOpts])
 
-  if (loading || !stats) {
+  if (loading) {
     return <p className="text-sm text-[var(--ui-muted)]">Loading analytics…</p>
+  }
+
+  if (error || !stats) {
+    return (
+      <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        {error ?? 'Could not load analytics.'}
+      </p>
+    )
   }
 
   return (

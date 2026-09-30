@@ -5,6 +5,16 @@ import type {
   ReportDocumentRow,
   ReportQueryRow,
 } from '../types'
+import { resolveApiBase, ApiError } from './api'
+
+/**
+ * HANDOFF FLAG for the backend engineer.
+ * - `true`  → frontend uses local demo data (current state)
+ * - `false` → frontend calls the real admin endpoints in ADMIN_API.md
+ *
+ * Flip this only after auth + admin routes match the contract.
+ */
+export const USE_MOCK_ADMIN = true
 
 const now = Date.now()
 const day = 24 * 60 * 60 * 1000
@@ -198,7 +208,46 @@ function delay(ms = 350) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
-export async function fetchDashboardStats(): Promise<DashboardStats> {
+async function readError(res: Response) {
+  const text = await res.text().catch(() => '')
+  try {
+    const body = JSON.parse(text) as { detail?: string }
+    if (typeof body.detail === 'string') return body.detail
+  } catch {
+    /* raw */
+  }
+  return text || `Request failed (HTTP ${res.status})`
+}
+
+async function apiFetch(
+  path: string,
+  options: { method?: string; token?: string; body?: BodyInit; apiBaseUrl?: string } = {},
+) {
+  const base = resolveApiBase(options.apiBaseUrl)
+  const headers: Record<string, string> = {}
+  if (options.token) headers.Authorization = `Bearer ${options.token}`
+  if (options.body && !(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json'
+  }
+  const res = await fetch(`${base}${path}`, {
+    method: options.method ?? 'GET',
+    headers,
+    body: options.body,
+  })
+  if (!res.ok) throw new ApiError(await readError(res), res.status)
+  if (res.status === 204) return null
+  return res.json()
+}
+
+export type AdminApiOptions = {
+  token?: string
+  apiBaseUrl?: string
+}
+
+export async function fetchDashboardStats(options: AdminApiOptions = {}): Promise<DashboardStats> {
+  if (!USE_MOCK_ADMIN) {
+    return (await apiFetch('/admin/stats', options)) as DashboardStats
+  }
   await delay()
   const ready = documents.filter((d) => d.status === 'ready')
   return {
@@ -248,12 +297,27 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
   }
 }
 
-export async function fetchAdminDocuments(): Promise<AdminDocument[]> {
+export async function fetchAdminDocuments(options: AdminApiOptions = {}): Promise<AdminDocument[]> {
+  if (!USE_MOCK_ADMIN) {
+    return (await apiFetch('/admin/documents', options)) as AdminDocument[]
+  }
   await delay()
   return [...documents].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
-export async function uploadAdminDocument(file: File): Promise<AdminDocument> {
+export async function uploadAdminDocument(
+  file: File,
+  options: AdminApiOptions = {},
+): Promise<AdminDocument> {
+  if (!USE_MOCK_ADMIN) {
+    const form = new FormData()
+    form.append('file', file)
+    return (await apiFetch('/admin/documents', {
+      ...options,
+      method: 'POST',
+      body: form,
+    })) as AdminDocument
+  }
   await delay(700)
   const doc: AdminDocument = {
     id: crypto.randomUUID(),
@@ -272,7 +336,20 @@ export async function uploadAdminDocument(file: File): Promise<AdminDocument> {
   return doc
 }
 
-export async function replaceAdminDocument(id: string, file: File): Promise<AdminDocument> {
+export async function replaceAdminDocument(
+  id: string,
+  file: File,
+  options: AdminApiOptions = {},
+): Promise<AdminDocument> {
+  if (!USE_MOCK_ADMIN) {
+    const form = new FormData()
+    form.append('file', file)
+    return (await apiFetch(`/admin/documents/${id}`, {
+      ...options,
+      method: 'PUT',
+      body: form,
+    })) as AdminDocument
+  }
   await delay(600)
   const idx = documents.findIndex((d) => d.id === id)
   if (idx < 0) throw new Error('Document not found')
@@ -290,7 +367,11 @@ export async function replaceAdminDocument(id: string, file: File): Promise<Admi
   return next
 }
 
-export async function deleteAdminDocument(id: string): Promise<void> {
+export async function deleteAdminDocument(id: string, options: AdminApiOptions = {}): Promise<void> {
+  if (!USE_MOCK_ADMIN) {
+    await apiFetch(`/admin/documents/${id}`, { ...options, method: 'DELETE' })
+    return
+  }
   await delay(400)
   documents = documents.filter((d) => d.id !== id)
 }
@@ -304,14 +385,8 @@ export type QueryReportFilters = {
   pageSize?: number
 }
 
-export async function fetchQueryReport(
-  filters: QueryReportFilters = {},
-): Promise<Paginated<ReportQueryRow>> {
-  await delay()
-  const page = filters.page ?? 1
-  const pageSize = filters.pageSize ?? 5
+function filterQueries(filters: QueryReportFilters) {
   let rows = [...querySeed]
-
   if (filters.status && filters.status !== 'all') {
     rows = rows.filter((r) => r.status === filters.status)
   }
@@ -332,11 +407,46 @@ export async function fetchQueryReport(
     const to = new Date(filters.to).getTime() + day
     rows = rows.filter((r) => new Date(r.askedAt).getTime() <= to)
   }
-
   rows.sort((a, b) => b.askedAt.localeCompare(a.askedAt))
+  return rows
+}
+
+export async function fetchQueryReport(
+  filters: QueryReportFilters = {},
+  options: AdminApiOptions = {},
+): Promise<Paginated<ReportQueryRow>> {
+  const page = filters.page ?? 1
+  const pageSize = filters.pageSize ?? 5
+
+  if (!USE_MOCK_ADMIN) {
+    const params = new URLSearchParams()
+    if (filters.status && filters.status !== 'all') params.set('status', filters.status)
+    if (filters.q) params.set('q', filters.q)
+    if (filters.from) params.set('from', filters.from)
+    if (filters.to) params.set('to', filters.to)
+    params.set('page', String(page))
+    params.set('page_size', String(pageSize))
+    return (await apiFetch(`/admin/reports/queries?${params}`, options)) as Paginated<ReportQueryRow>
+  }
+
+  await delay()
+  const rows = filterQueries(filters)
   const total = rows.length
   const start = (page - 1) * pageSize
   return { items: rows.slice(start, start + pageSize), total, page, pageSize }
+}
+
+/** All filtered query rows (for CSV export). */
+export async function fetchAllQueryReportRows(
+  filters: Omit<QueryReportFilters, 'page' | 'pageSize'> = {},
+  options: AdminApiOptions = {},
+): Promise<ReportQueryRow[]> {
+  if (!USE_MOCK_ADMIN) {
+    const data = await fetchQueryReport({ ...filters, page: 1, pageSize: 10_000 }, options)
+    return data.items
+  }
+  await delay(200)
+  return filterQueries(filters)
 }
 
 export type DocumentReportFilters = {
@@ -348,12 +458,7 @@ export type DocumentReportFilters = {
 
 type DocumentStatusLike = 'ready' | 'processing' | 'failed'
 
-export async function fetchDocumentReport(
-  filters: DocumentReportFilters = {},
-): Promise<Paginated<ReportDocumentRow>> {
-  await delay()
-  const page = filters.page ?? 1
-  const pageSize = filters.pageSize ?? 5
+function filterDocumentRows(filters: DocumentReportFilters) {
   const hitMap: Record<string, number> = {
     'Postgraduate Handbook': 64,
     'Examination Regulations': 41,
@@ -381,9 +486,41 @@ export async function fetchDocumentReport(
         r.title.toLowerCase().includes(needle) || r.documentType.toLowerCase().includes(needle),
     )
   }
-
   rows.sort((a, b) => b.hits - a.hits)
+  return rows
+}
+
+export async function fetchDocumentReport(
+  filters: DocumentReportFilters = {},
+  options: AdminApiOptions = {},
+): Promise<Paginated<ReportDocumentRow>> {
+  const page = filters.page ?? 1
+  const pageSize = filters.pageSize ?? 5
+
+  if (!USE_MOCK_ADMIN) {
+    const params = new URLSearchParams()
+    if (filters.status && filters.status !== 'all') params.set('status', filters.status)
+    if (filters.q) params.set('q', filters.q)
+    params.set('page', String(page))
+    params.set('page_size', String(pageSize))
+    return (await apiFetch(`/admin/reports/documents?${params}`, options)) as Paginated<ReportDocumentRow>
+  }
+
+  await delay()
+  const rows = filterDocumentRows(filters)
   const total = rows.length
   const start = (page - 1) * pageSize
   return { items: rows.slice(start, start + pageSize), total, page, pageSize }
+}
+
+export async function fetchAllDocumentReportRows(
+  filters: Omit<DocumentReportFilters, 'page' | 'pageSize'> = {},
+  options: AdminApiOptions = {},
+): Promise<ReportDocumentRow[]> {
+  if (!USE_MOCK_ADMIN) {
+    const data = await fetchDocumentReport({ ...filters, page: 1, pageSize: 10_000 }, options)
+    return data.items
+  }
+  await delay(200)
+  return filterDocumentRows(filters)
 }

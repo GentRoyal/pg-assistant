@@ -10,6 +10,23 @@ Instead of relying only on the general knowledge of a Large Language Model (LLM)
 
 This helps improve the accuracy, relevance, and traceability of generated answers.
 
+## Frontend (ready for handoff)
+
+The React app lives in [`frontend/`](./frontend/). Demo accounts, admin console stubs, and the backend admin contract are documented there:
+
+- [`frontend/DEMO.md`](./frontend/DEMO.md) — walkthrough
+- [`frontend/ADMIN_API.md`](./frontend/ADMIN_API.md) — admin endpoints the backend should implement
+- [`frontend/README.md`](./frontend/README.md) — setup, chat API, deploy
+
+```bash
+cd frontend && npm install && npm run dev
+```
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Student | `student@ui.edu.ng` | `demo1234` |
+| Admin | `admin@ui.edu.ng` | `admin1234` |
+
 ## RAG Workflow
 
 The main workflow of the system is:

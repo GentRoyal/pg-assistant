@@ -77,8 +77,13 @@ export function Sidebar({ open, onClose }: Props) {
           </div>
 
           <nav className="chat-scroll flex-1 overflow-y-auto px-2 pb-3" aria-label="Previous chats">
+            <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wide text-white/45">
+              Your chats only · this device
+            </p>
             {conversations.length === 0 ? (
-              <p className="px-3 py-6 text-sm text-white/70">Your chats will appear here.</p>
+              <p className="px-3 py-4 text-sm text-white/70">
+                Start a new chat — history stays with your account on this browser.
+              </p>
             ) : (
               <ul className="space-y-1">
                 {conversations.map((c) => {

@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchDocumentReport, fetchQueryReport } from '../../lib/adminApi'
+import { Download } from 'lucide-react'
+import {
+  fetchAllDocumentReportRows,
+  fetchAllQueryReportRows,
+  fetchDocumentReport,
+  fetchQueryReport,
+  USE_MOCK_ADMIN,
+} from '../../lib/adminApi'
+import { useAdminApiOptions } from '../../hooks/useAdminApiOptions'
+import { downloadCsv, toCsv } from '../../lib/csv'
 import type { Paginated, ReportDocumentRow, ReportQueryRow } from '../../types'
 import { Button } from '../../components/ui/Button'
 
@@ -49,6 +58,7 @@ function Pagination({
 }
 
 export function AdminReportsPage() {
+  const apiOpts = useAdminApiOptions()
   const [tab, setTab] = useState<Tab>('queries')
   const [q, setQ] = useState('')
   const [status, setStatus] = useState('all')
@@ -57,6 +67,7 @@ export function AdminReportsPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(5)
   const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState(false)
   const [queryData, setQueryData] = useState<Paginated<ReportQueryRow> | null>(null)
   const [docData, setDocData] = useState<Paginated<ReportDocumentRow> | null>(null)
 
@@ -70,22 +81,28 @@ export function AdminReportsPage() {
     setLoading(true)
     const run = async () => {
       if (tab === 'queries') {
-        const data = await fetchQueryReport({
-          q,
-          status: status as 'all' | 'answered' | 'weak' | 'error',
-          from: from || undefined,
-          to: to || undefined,
-          page,
-          pageSize,
-        })
+        const data = await fetchQueryReport(
+          {
+            q,
+            status: status as 'all' | 'answered' | 'weak' | 'error',
+            from: from || undefined,
+            to: to || undefined,
+            page,
+            pageSize,
+          },
+          apiOpts,
+        )
         if (alive) setQueryData(data)
       } else {
-        const data = await fetchDocumentReport({
-          q,
-          status: status as 'all' | 'ready' | 'processing' | 'failed',
-          page,
-          pageSize,
-        })
+        const data = await fetchDocumentReport(
+          {
+            q,
+            status: status as 'all' | 'ready' | 'processing' | 'failed',
+            page,
+            pageSize,
+          },
+          apiOpts,
+        )
         if (alive) setDocData(data)
       }
     }
@@ -95,7 +112,7 @@ export function AdminReportsPage() {
     return () => {
       alive = false
     }
-  }, [filtersKey, tab, q, status, from, to, page, pageSize])
+  }, [filtersKey, tab, q, status, from, to, page, pageSize, apiOpts])
 
   const resetFilters = () => {
     setQ('')
@@ -105,13 +122,75 @@ export function AdminReportsPage() {
     setPage(1)
   }
 
+  const onExport = async () => {
+    setExporting(true)
+    try {
+      if (tab === 'queries') {
+        const rows = await fetchAllQueryReportRows(
+          {
+            q,
+            status: status as 'all' | 'answered' | 'weak' | 'error',
+            from: from || undefined,
+            to: to || undefined,
+          },
+          apiOpts,
+        )
+        const csv = toCsv(
+          ['askedAt', 'studentEmail', 'question', 'status', 'latencyMs', 'topSource'],
+          rows.map((r) => ({
+            askedAt: r.askedAt,
+            studentEmail: r.studentEmail,
+            question: r.question,
+            status: r.status,
+            latencyMs: r.latencyMs,
+            topSource: r.topSource,
+          })),
+        )
+        downloadCsv(`pg-assistant-query-report-${Date.now()}.csv`, csv)
+      } else {
+        const rows = await fetchAllDocumentReportRows(
+          {
+            q,
+            status: status as 'all' | 'ready' | 'processing' | 'failed',
+          },
+          apiOpts,
+        )
+        const csv = toCsv(
+          ['title', 'documentType', 'hits', 'status', 'lastCitedAt'],
+          rows.map((r) => ({
+            title: r.title,
+            documentType: r.documentType,
+            hits: r.hits,
+            status: r.status,
+            lastCitedAt: r.lastCitedAt,
+          })),
+        )
+        downloadCsv(`pg-assistant-document-report-${Date.now()}.csv`, csv)
+      }
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-[var(--ui-navy)] sm:text-2xl">Reports</h1>
-        <p className="mt-1 text-sm text-[var(--ui-muted)]">
-          Filterable, paginated reports for queries and document usage.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-[var(--ui-navy)] sm:text-2xl">Reports</h1>
+          <p className="mt-1 text-sm text-[var(--ui-muted)]">
+            Filterable, paginated reports for queries and document usage.
+            {USE_MOCK_ADMIN ? ' Demo dataset until backend reports APIs are live.' : ''}
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          className="!min-h-10"
+          disabled={exporting || loading}
+          onClick={() => void onExport()}
+        >
+          <Download size={14} aria-hidden />
+          {exporting ? 'Exporting…' : 'Export CSV'}
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -254,7 +333,30 @@ export function AdminReportsPage() {
           <p className="px-4 py-10 text-center text-sm text-[var(--ui-muted)]">Loading report…</p>
         ) : tab === 'queries' && queryData ? (
           <>
-            <div className="overflow-x-auto">
+            {/* Mobile cards */}
+            <ul className="divide-y divide-[var(--ui-line)] md:hidden">
+              {queryData.items.length === 0 ? (
+                <li className="px-4 py-8 text-center text-sm text-[var(--ui-muted)]">
+                  No rows match these filters.
+                </li>
+              ) : (
+                queryData.items.map((row) => (
+                  <li key={row.id} className="space-y-1 px-4 py-3">
+                    <p className="text-sm font-medium text-[var(--ui-ink)]">{row.question}</p>
+                    <p className="text-xs text-[var(--ui-muted)]">{row.studentEmail}</p>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className="capitalize">{row.status}</span>
+                      <span>·</span>
+                      <span>{row.latencyMs ? `${row.latencyMs} ms` : '—'}</span>
+                      <span>·</span>
+                      <span>{row.topSource}</span>
+                    </div>
+                  </li>
+                ))
+              )}
+            </ul>
+
+            <div className="hidden overflow-x-auto md:block">
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-[var(--ui-soft)] text-xs uppercase tracking-wide text-[var(--ui-muted)]">
                   <tr>
@@ -276,7 +378,7 @@ export function AdminReportsPage() {
                   ) : (
                     queryData.items.map((row) => (
                       <tr key={row.id} className="border-t border-[var(--ui-line)]">
-                        <td className="px-4 py-3 text-xs text-[var(--ui-muted)] whitespace-nowrap">
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--ui-muted)]">
                           {new Date(row.askedAt).toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-xs">{row.studentEmail}</td>
@@ -294,7 +396,9 @@ export function AdminReportsPage() {
                             {row.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-xs">{row.latencyMs ? `${row.latencyMs} ms` : '—'}</td>
+                        <td className="px-4 py-3 text-xs">
+                          {row.latencyMs ? `${row.latencyMs} ms` : '—'}
+                        </td>
                         <td className="px-4 py-3 text-xs text-[var(--ui-muted)]">{row.topSource}</td>
                       </tr>
                     ))
@@ -311,7 +415,23 @@ export function AdminReportsPage() {
           </>
         ) : docData ? (
           <>
-            <div className="overflow-x-auto">
+            <ul className="divide-y divide-[var(--ui-line)] md:hidden">
+              {docData.items.length === 0 ? (
+                <li className="px-4 py-8 text-center text-sm text-[var(--ui-muted)]">
+                  No rows match these filters.
+                </li>
+              ) : (
+                docData.items.map((row) => (
+                  <li key={row.id} className="px-4 py-3">
+                    <p className="font-medium text-[var(--ui-ink)]">{row.title}</p>
+                    <p className="mt-1 text-xs text-[var(--ui-muted)]">
+                      {row.documentType} · {row.hits} hits · {row.status}
+                    </p>
+                  </li>
+                ))
+              )}
+            </ul>
+            <div className="hidden overflow-x-auto md:block">
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-[var(--ui-soft)] text-xs uppercase tracking-wide text-[var(--ui-muted)]">
                   <tr>

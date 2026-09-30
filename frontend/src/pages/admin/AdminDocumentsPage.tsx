@@ -5,7 +5,9 @@ import {
   fetchAdminDocuments,
   replaceAdminDocument,
   uploadAdminDocument,
+  USE_MOCK_ADMIN,
 } from '../../lib/adminApi'
+import { useAdminApiOptions } from '../../hooks/useAdminApiOptions'
 import type { AdminDocument } from '../../types'
 import { ADMIN_DOC_ACCEPT } from '../../types'
 import { Button } from '../../components/ui/Button'
@@ -31,7 +33,42 @@ function StatusPill({ status }: { status: AdminDocument['status'] }) {
   )
 }
 
+function DocActions({
+  doc,
+  busy,
+  onReplace,
+  onDelete,
+}: {
+  doc: AdminDocument
+  busy: boolean
+  onReplace: () => void
+  onDelete: () => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      <Button
+        variant="secondary"
+        className="!min-h-8 !px-2.5 !py-1 !text-xs"
+        disabled={busy}
+        onClick={onReplace}
+      >
+        Update
+      </Button>
+      <Button
+        variant="ghost"
+        className="!min-h-8 !px-2 !py-1 !text-[var(--ui-danger)]"
+        disabled={busy}
+        aria-label={`Delete ${doc.title}`}
+        onClick={onDelete}
+      >
+        <Trash2 size={14} />
+      </Button>
+    </div>
+  )
+}
+
 export function AdminDocumentsPage() {
+  const apiOpts = useAdminApiOptions()
   const [docs, setDocs] = useState<AdminDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -45,13 +82,13 @@ export function AdminDocumentsPage() {
     setLoading(true)
     setError(null)
     try {
-      setDocs(await fetchAdminDocuments())
+      setDocs(await fetchAdminDocuments(apiOpts))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load documents.')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [apiOpts])
 
   useEffect(() => {
     void reload()
@@ -67,7 +104,7 @@ export function AdminDocumentsPage() {
     setBusy(true)
     setError(null)
     try {
-      await uploadAdminDocument(file)
+      await uploadAdminDocument(file, apiOpts)
       await reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed.')
@@ -83,7 +120,7 @@ export function AdminDocumentsPage() {
     setBusy(true)
     setError(null)
     try {
-      await replaceAdminDocument(replaceId, file)
+      await replaceAdminDocument(replaceId, file, apiOpts)
       setReplaceId(null)
       await reload()
     } catch (err) {
@@ -98,7 +135,7 @@ export function AdminDocumentsPage() {
     if (!deleteId) return
     setBusy(true)
     try {
-      await deleteAdminDocument(deleteId)
+      await deleteAdminDocument(deleteId, apiOpts)
       setDeleteId(null)
       await reload()
     } catch (err) {
@@ -106,6 +143,11 @@ export function AdminDocumentsPage() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const startReplace = (id: string) => {
+    setReplaceId(id)
+    replaceRef.current?.click()
   }
 
   return (
@@ -117,6 +159,7 @@ export function AdminDocumentsPage() {
           </h1>
           <p className="mt-1 text-sm text-[var(--ui-muted)]">
             Upload, replace, or remove regulation PDFs in the knowledge base.
+            {USE_MOCK_ADMIN ? ' Changes stay in this browser until the admin API is live.' : ''}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -145,80 +188,94 @@ export function AdminDocumentsPage() {
       ) : null}
 
       <div className="overflow-hidden rounded-2xl border border-[var(--ui-line)] bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-[var(--ui-soft)] text-xs uppercase tracking-wide text-[var(--ui-muted)]">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Document</th>
-                <th className="px-4 py-3 font-semibold">Type</th>
-                <th className="px-4 py-3 font-semibold">Pages</th>
-                <th className="px-4 py-3 font-semibold">Chunks</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Updated</th>
-                <th className="px-4 py-3 font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-[var(--ui-muted)]">
-                    Loading documents…
-                  </td>
-                </tr>
-              ) : docs.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-[var(--ui-muted)]">
-                    No documents yet — upload the first handbook to get started.
-                  </td>
-                </tr>
-              ) : (
-                docs.map((doc) => (
-                  <tr key={doc.id} className="border-t border-[var(--ui-line)]">
-                    <td className="px-4 py-3">
+        {loading ? (
+          <p className="px-4 py-10 text-center text-sm text-[var(--ui-muted)]">Loading documents…</p>
+        ) : docs.length === 0 ? (
+          <div className="px-4 py-12 text-center">
+            <p className="text-sm font-medium text-[var(--ui-navy)]">No documents yet</p>
+            <p className="mt-1 text-sm text-[var(--ui-muted)]">
+              Upload the first handbook PDF to seed the knowledge base.
+            </p>
+            <Button className="mt-4" onClick={() => uploadRef.current?.click()} disabled={busy}>
+              <Upload size={14} aria-hidden />
+              Upload PDF
+            </Button>
+          </div>
+        ) : (
+          <>
+            {/* Mobile cards */}
+            <ul className="divide-y divide-[var(--ui-line)] md:hidden">
+              {docs.map((doc) => (
+                <li key={doc.id} className="space-y-2 px-4 py-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
                       <p className="font-medium text-[var(--ui-ink)]">{doc.title}</p>
                       <p className="text-xs text-[var(--ui-muted)]">
                         {doc.fileName} · {formatBytes(doc.sizeBytes)}
                       </p>
-                    </td>
-                    <td className="px-4 py-3 text-[var(--ui-muted)]">{doc.documentType}</td>
-                    <td className="px-4 py-3">{doc.pages || '—'}</td>
-                    <td className="px-4 py-3">{doc.chunks || '—'}</td>
-                    <td className="px-4 py-3">
-                      <StatusPill status={doc.status} />
-                    </td>
-                    <td className="px-4 py-3 text-xs text-[var(--ui-muted)]">
-                      {new Date(doc.updatedAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        <Button
-                          variant="secondary"
-                          className="!min-h-8 !px-2.5 !py-1 !text-xs"
-                          disabled={busy}
-                          onClick={() => {
-                            setReplaceId(doc.id)
-                            replaceRef.current?.click()
-                          }}
-                        >
-                          Update
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          className="!min-h-8 !px-2 !py-1 !text-[var(--ui-danger)]"
-                          disabled={busy}
-                          aria-label={`Delete ${doc.title}`}
-                          onClick={() => setDeleteId(doc.id)}
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
-                    </td>
+                    </div>
+                    <StatusPill status={doc.status} />
+                  </div>
+                  <p className="text-xs text-[var(--ui-muted)]">
+                    {doc.documentType} · {doc.pages || '—'} pages · {doc.chunks || '—'} chunks ·{' '}
+                    {new Date(doc.updatedAt).toLocaleDateString()}
+                  </p>
+                  <DocActions
+                    doc={doc}
+                    busy={busy}
+                    onReplace={() => startReplace(doc.id)}
+                    onDelete={() => setDeleteId(doc.id)}
+                  />
+                </li>
+              ))}
+            </ul>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-[var(--ui-soft)] text-xs uppercase tracking-wide text-[var(--ui-muted)]">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Document</th>
+                    <th className="px-4 py-3 font-semibold">Type</th>
+                    <th className="px-4 py-3 font-semibold">Pages</th>
+                    <th className="px-4 py-3 font-semibold">Chunks</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Updated</th>
+                    <th className="px-4 py-3 font-semibold">Actions</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {docs.map((doc) => (
+                    <tr key={doc.id} className="border-t border-[var(--ui-line)]">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-[var(--ui-ink)]">{doc.title}</p>
+                        <p className="text-xs text-[var(--ui-muted)]">
+                          {doc.fileName} · {formatBytes(doc.sizeBytes)}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-[var(--ui-muted)]">{doc.documentType}</td>
+                      <td className="px-4 py-3">{doc.pages || '—'}</td>
+                      <td className="px-4 py-3">{doc.chunks || '—'}</td>
+                      <td className="px-4 py-3">
+                        <StatusPill status={doc.status} />
+                      </td>
+                      <td className="px-4 py-3 text-xs text-[var(--ui-muted)]">
+                        {new Date(doc.updatedAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3">
+                        <DocActions
+                          doc={doc}
+                          busy={busy}
+                          onReplace={() => startReplace(doc.id)}
+                          onDelete={() => setDeleteId(doc.id)}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       <input
@@ -235,8 +292,8 @@ export function AdminDocumentsPage() {
         onClose={() => setDeleteId(null)}
       >
         <p className="text-sm text-[var(--ui-muted)]">
-          This removes the document and its embeddings from the knowledge base (demo). This cannot be
-          undone.
+          This removes the document and its embeddings from the knowledge base
+          {USE_MOCK_ADMIN ? ' (demo — local only)' : ''}. This cannot be undone.
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="secondary" onClick={() => setDeleteId(null)}>

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
+import { USE_MOCK_ADMIN } from '../../lib/adminApi'
 import { Button } from '../ui/Button'
 
 const NAV = [
@@ -99,10 +100,29 @@ export function AdminLayout() {
             <p className="text-sm font-semibold text-[var(--ui-navy)]">Admin Console</p>
             <p className="text-xs text-[var(--ui-muted)]">University of Ibadan · PG Assistant</p>
           </div>
-          <span className="hidden rounded-full bg-[var(--ui-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ui-navy)] sm:inline">
-            Demo data
-          </span>
+          {USE_MOCK_ADMIN ? (
+            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+              Stub APIs
+            </span>
+          ) : (
+            <span className="hidden rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 sm:inline">
+              Live APIs
+            </span>
+          )}
         </header>
+
+        {USE_MOCK_ADMIN ? (
+          <div
+            role="status"
+            className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900 md:px-6"
+          >
+            Admin console is running on <strong>local stub data</strong>. Flip{' '}
+            <code className="rounded bg-white/80 px-1">USE_MOCK_ADMIN</code> to{' '}
+            <code className="rounded bg-white/80 px-1">false</code> in{' '}
+            <code className="rounded bg-white/80 px-1">src/lib/adminApi.ts</code> once backend
+            routes in <code className="rounded bg-white/80 px-1">ADMIN_API.md</code> are ready.
+          </div>
+        ) : null}
 
         <main className="chat-scroll min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
           <Outlet />
