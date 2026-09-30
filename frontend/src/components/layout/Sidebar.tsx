@@ -1,4 +1,5 @@
-import { LogOut, MessageSquarePlus, Settings, Trash2 } from 'lucide-react'
+import { LogOut, MessageSquarePlus, Pencil, Settings, Trash2 } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useChat } from '../../context/ChatContext'
@@ -17,7 +18,30 @@ export function Sidebar({ open, onClose }: Props) {
     createConversation,
     selectConversation,
     deleteConversation,
+    renameConversation,
   } = useChat()
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [draftTitle, setDraftTitle] = useState('')
+  // Closing the box can fire a blur after Escape; this stops that blur from saving.
+  const cancelled = useRef(false)
+
+  const startRename = (id: string, title: string) => {
+    cancelled.current = false
+    setEditingId(id)
+    setDraftTitle(title)
+  }
+
+  // An empty title keeps the old one (renameConversation ignores blanks).
+  const saveRename = () => {
+    if (editingId && !cancelled.current) renameConversation(editingId, draftTitle)
+    cancelled.current = true
+    setEditingId(null)
+  }
+
+  const cancelRename = () => {
+    cancelled.current = true
+    setEditingId(null)
+  }
 
   const closeIfMobile = () => {
     if (window.matchMedia('(max-width: 1023px)').matches) onClose()
@@ -88,6 +112,26 @@ export function Sidebar({ open, onClose }: Props) {
               <ul className="space-y-1">
                 {conversations.map((c) => {
                   const active = activeConversation?.id === c.id
+                  if (editingId === c.id) {
+                    return (
+                      <li key={c.id}>
+                        <input
+                          autoFocus
+                          value={draftTitle}
+                          maxLength={80}
+                          aria-label="Chat name"
+                          onChange={(e) => setDraftTitle(e.target.value)}
+                          onFocus={(e) => e.target.select()}
+                          onBlur={saveRename}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveRename()
+                            if (e.key === 'Escape') cancelRename()
+                          }}
+                          className="w-full rounded-xl border border-[var(--ui-gold)] bg-white/10 px-3 py-2 text-xs text-white outline-none sm:text-[13px]"
+                        />
+                      </li>
+                    )
+                  }
                   return (
                     <li key={c.id} className="group relative">
                       <button
@@ -96,11 +140,19 @@ export function Sidebar({ open, onClose }: Props) {
                           selectConversation(c.id)
                           closeIfMobile()
                         }}
-                      className={`w-full rounded-xl px-3 py-2 pr-11 text-left text-xs leading-snug transition sm:text-[13px] ${
+                      className={`w-full rounded-xl px-3 py-2 pr-20 text-left text-xs leading-snug transition sm:text-[13px] ${
                         active ? 'bg-white/15 text-white' : 'text-white/80 hover:bg-white/10'
                       }`}
                     >
                       <span className="line-clamp-2">{c.title}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="absolute right-10 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-lg text-white/70 transition hover:bg-white/10 hover:text-white"
+                        aria-label={`Rename chat ${c.title}`}
+                        onClick={() => startRename(c.id, c.title)}
+                      >
+                        <Pencil size={14} />
                       </button>
                       <button
                         type="button"
